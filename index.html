@@ -17,6 +17,7 @@
         h1 { font-size:20px; margin-bottom:8px; color:var(--text); }
         p { font-size:14px; color:#64748b; line-height:1.5; margin-bottom:24px; }
         .btn { width:100%; padding:14px; border-radius:14px; border:none; font-weight:700; background:var(--primary); color:#fff; cursor:pointer; font-size:15px; }
+        .btn:disabled { background:#cbd5e1; cursor:not-allowed; }
         .loader { width:24px; height:24px; border:3px solid #e2e8f0; border-top-color:var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
         @keyframes spin { to { transform:rotate(360deg); } } @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
         .state-success .icon-box { background:#dcfce7; color:#16a34a; }
@@ -27,7 +28,7 @@
 </head>
 <body>
 
-    <div id="viewLoad" class="card active"><div class="loader"></div><p style="margin-top:15px">Checking...</p></div>
+    <div id="viewLoad" class="card active"><div class="loader"></div><p style="margin-top:15px">Security Check...</p></div>
 
     <div id="viewStep1" class="card">
         <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
@@ -49,6 +50,7 @@
     </div>
 
 <script>
+    // --- FIREBASE CONFIGURATION ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -62,12 +64,14 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // --- SECURITY SETTINGS ---
+    const MIN_SECONDS_REQUIRED = 15; // User must take at least 15 seconds
+    
+    // Elements
     const vLoad=document.getElementById('viewLoad'), vStep1=document.getElementById('viewStep1'), vFinal=document.getElementById('viewFinal');
     const finalTitle=document.getElementById('finalTitle'), finalDesc=document.getElementById('finalDesc'), finalIcon=document.getElementById('finalIcon');
     let shortenerUrl = "";
-
-    // --- SECURITY SETTING: Minimum Seconds Required ---
-    const MIN_SECONDS_REQUIRED = 15; // User must take at least 15 seconds
+    let cachedUid = "", cachedCode = "";
 
     async function init() {
         let qs = window.location.hash.substring(1) || window.location.search;
@@ -85,8 +89,9 @@
             if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; }
         }
 
-        // 2. APP ENTRY (First Time)
+        // 2. APP ENTRY (Step 1)
         if(did && code && uid) {
+            cachedUid = uid; cachedCode = code;
             localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
             try {
                 const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
@@ -100,38 +105,43 @@
             return;
         }
 
-        // 3. RETURN FROM SHORTENER
+        // 3. RETURN FROM SHORTENER (Step 2)
         const pending = localStorage.getItem('pending_verif');
         if(pending) {
+            const data = JSON.parse(pending);
             
-            // --- TIME TRAP CHECK (ANTI-BYPASS) ---
-            const startTime = localStorage.getItem('verify_start_time');
+            // --- SERVER-SIDE TIME TRAP LOGIC ---
+            // Hum Firebase se check karenge ki "Start Time" kya tha
+            const codeRef = db.ref(`users/${data.uid}/verification_codes/${data.code}`);
+            const snap = await codeRef.once('value');
+            const codeData = snap.val();
+
+            if(!codeData) { showError("Invalid Session", "Please restart."); return; }
             
-            if(!startTime) {
-                // User ne button click hi nahi kiya, direct link open kiya hai
-                showError("Access Denied", "Please start verification from the App.");
+            // Trap Check: Kya user ne button click kiya tha?
+            if(!codeData.started_at) {
+                // User ne button click nahi kiya, direct link khola hai
+                showError("Access Denied", "Please click 'VERIFY NOW' button first.");
+                setTimeout(() => { showView(vStep1); }, 2000);
                 return;
             }
 
-            const timeTaken = (Date.now() - parseInt(startTime)) / 1000; // in seconds
-
+            // Trap Check: Time Calculation (Server/DB Time vs Now)
+            const timeTaken = (Date.now() - codeData.started_at) / 1000;
+            
             if(isSecretParam) {
-                // Secret Link hai, lekin Time Check karo
+                // Time Check
                 if(timeTaken < MIN_SECONDS_REQUIRED) {
-                     // CAUGHT: User bahut jaldi aa gaya (Shortcut/Hack)
-                     showError("Verification Failed", `Process too fast (${Math.floor(timeTaken)}s). Please complete the Shortener properly.`);
-                     // Reset time to prevent retry loop without clicking button
-                     localStorage.removeItem('verify_start_time');
+                     showError("Verification Failed", `Too Fast! (${Math.floor(timeTaken)}s). Please allow the shortener to load completely.`);
                      document.getElementById('retryBtn').style.display = 'block';
+                     // Reset start time on server so they have to click again
+                     await codeRef.update({ started_at: null });
                      return;
                 }
-
-                // Time OK, Secret OK -> Verify
-                const data = JSON.parse(pending);
+                // All Good -> Verify
                 verifyUser(data.did, data.code, data.uid);
             } else {
-                // Secret Missing (Back button dabaya) -> Show Button Again
-                const data = JSON.parse(pending);
+                // Back button dabaya -> Button firse dikhao
                 try {
                      const conf = (await db.ref(`users/${data.uid}/config`).once('value')).val();
                      if(conf) shortenerUrl = conf.shortener_api;
@@ -144,27 +154,36 @@
         showError("Invalid Session", "Please open this page from the App.");
     }
 
-    function goToShortener() {
+    async function goToShortener() {
         if(shortenerUrl) {
-            // --- SET START TIME (TRAP ACTIVATED) ---
-            localStorage.setItem('verify_start_time', Date.now());
-            window.location.href = shortenerUrl;
+            // Disable button
+            document.getElementById('btnVerifyLink').innerText = "Processing...";
+            document.getElementById('btnVerifyLink').disabled = true;
+
+            // --- SET SERVER START TIME (SECURE) ---
+            // LocalStorage nahi, ab Database me time save hoga
+            const pending = localStorage.getItem('pending_verif');
+            if(pending) {
+                const data = JSON.parse(pending);
+                try {
+                    await db.ref(`users/${data.uid}/verification_codes/${data.code}`).update({
+                        started_at: firebase.database.ServerValue.TIMESTAMP
+                    });
+                    
+                    // Redirect
+                    window.location.href = shortenerUrl;
+                } catch(e) {
+                    alert("Connection Error. Please try again.");
+                    document.getElementById('btnVerifyLink').disabled = false;
+                }
+            }
         }
     }
 
     function retryProcess() {
-        // Retry ke liye wapis Step 1 par bhejo
-        localStorage.removeItem('verify_start_time');
-        const pending = localStorage.getItem('pending_verif');
-        if(pending) {
-             const data = JSON.parse(pending);
-             // URL saaf karo taaki ?v=1 hat jaye
-             window.history.replaceState({}, document.title, window.location.pathname);
-             // Reload config logic
-             init();
-        } else {
-             window.location.reload();
-        }
+        localStorage.removeItem('pending_verif');
+        window.history.replaceState({}, document.title, window.location.pathname);
+        window.location.reload();
     }
 
     async function verifyUser(did, code, uid) {
@@ -187,7 +206,6 @@
             await db.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
             localStorage.removeItem('pending_verif');
-            localStorage.removeItem('verify_start_time'); // Cleanup
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
@@ -215,7 +233,7 @@
         document.body.classList.add('state-error');
         finalIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
         finalTitle.innerText = t; finalDesc.innerText = m;
-        document.getElementById('retryBtn').style.display = 'none'; // Error me retry mat dikhao unless specific logic
+        document.getElementById('retryBtn').style.display = 'none';
     }
 
     function startTimer(exp) {
