@@ -41,11 +41,14 @@
         <div class="icon-box" id="finalIcon"><i class="fas fa-circle-notch fa-spin"></i></div>
         <h1 id="finalTitle">Verifying...</h1>
         <p id="finalDesc">Please wait while we confirm your status.</p>
+        
         <div id="timerArea" class="timer-box">
-            <div style="font-size:10px;text-transform:uppercase;color:#64748b;margin-bottom:5px">Session Valid For</div>
+            <div style="font-size:10px;text-transform:uppercase;color:#64748b;margin-bottom:5px;letter-spacing:1px;font-weight:700;">ACCESS GRANTED FOR</div>
             <div class="t-val" id="timerDisplay">00:00:00</div>
         </div>
+
         <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Close Window</button>
+        
         <button class="btn" id="retryBtn" onclick="retryProcess()" style="display:none; background:#dc2626; margin-top:10px;">Retry Verification</button>
     </div>
 
@@ -64,14 +67,13 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // --- SECURITY SETTINGS ---
-    const MIN_SECONDS_REQUIRED = 15; // User must take at least 15 seconds
+    // --- SECURITY SETTING: UPDATED TO 30 SECONDS ---
+    const MIN_SECONDS_REQUIRED = 30; 
     
-    // Elements
     const vLoad=document.getElementById('viewLoad'), vStep1=document.getElementById('viewStep1'), vFinal=document.getElementById('viewFinal');
     const finalTitle=document.getElementById('finalTitle'), finalDesc=document.getElementById('finalDesc'), finalIcon=document.getElementById('finalIcon');
     let shortenerUrl = "";
-    let cachedUid = "", cachedCode = "";
+    let cachedUid = "";
 
     async function init() {
         let qs = window.location.hash.substring(1) || window.location.search;
@@ -89,9 +91,9 @@
             if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; }
         }
 
-        // 2. APP ENTRY (Step 1)
+        // 2. APP ENTRY (Step 1 - Data Save)
         if(did && code && uid) {
-            cachedUid = uid; cachedCode = code;
+            cachedUid = uid;
             localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
             try {
                 const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
@@ -111,37 +113,38 @@
             const data = JSON.parse(pending);
             
             // --- SERVER-SIDE TIME TRAP LOGIC ---
-            // Hum Firebase se check karenge ki "Start Time" kya tha
             const codeRef = db.ref(`users/${data.uid}/verification_codes/${data.code}`);
             const snap = await codeRef.once('value');
             const codeData = snap.val();
 
             if(!codeData) { showError("Invalid Session", "Please restart."); return; }
             
-            // Trap Check: Kya user ne button click kiya tha?
+            // Trap Check 1: Button Clicked?
             if(!codeData.started_at) {
-                // User ne button click nahi kiya, direct link khola hai
                 showError("Access Denied", "Please click 'VERIFY NOW' button first.");
                 setTimeout(() => { showView(vStep1); }, 2000);
                 return;
             }
 
-            // Trap Check: Time Calculation (Server/DB Time vs Now)
+            // Trap Check 2: Time Calculation
             const timeTaken = (Date.now() - codeData.started_at) / 1000;
             
             if(isSecretParam) {
-                // Time Check
+                // Time Check (30 Seconds Rule)
                 if(timeTaken < MIN_SECONDS_REQUIRED) {
-                     showError("Verification Failed", `Too Fast! (${Math.floor(timeTaken)}s). Please allow the shortener to load completely.`);
+                     // UPDATED ERROR MESSAGE
+                     showError("Verification Failed", "Please Complete the shortner process first!");
                      document.getElementById('retryBtn').style.display = 'block';
-                     // Reset start time on server so they have to click again
+                     
+                     // Reset start time so they have to start over
                      await codeRef.update({ started_at: null });
                      return;
                 }
-                // All Good -> Verify
+                
+                // Verify
                 verifyUser(data.did, data.code, data.uid);
             } else {
-                // Back button dabaya -> Button firse dikhao
+                // Secret Missing (Back button) -> Show Button Again
                 try {
                      const conf = (await db.ref(`users/${data.uid}/config`).once('value')).val();
                      if(conf) shortenerUrl = conf.shortener_api;
@@ -156,21 +159,17 @@
 
     async function goToShortener() {
         if(shortenerUrl) {
-            // Disable button
             document.getElementById('btnVerifyLink').innerText = "Processing...";
             document.getElementById('btnVerifyLink').disabled = true;
 
-            // --- SET SERVER START TIME (SECURE) ---
-            // LocalStorage nahi, ab Database me time save hoga
             const pending = localStorage.getItem('pending_verif');
             if(pending) {
                 const data = JSON.parse(pending);
                 try {
+                    // Set Server Timestamp
                     await db.ref(`users/${data.uid}/verification_codes/${data.code}`).update({
                         started_at: firebase.database.ServerValue.TIMESTAMP
                     });
-                    
-                    // Redirect
                     window.location.href = shortenerUrl;
                 } catch(e) {
                     alert("Connection Error. Please try again.");
@@ -181,8 +180,10 @@
     }
 
     function retryProcess() {
-        localStorage.removeItem('pending_verif');
-        window.history.replaceState({}, document.title, window.location.pathname);
+        // --- RETRY LOGIC: RELOAD TO SHOW START LINK ---
+        // Humne 'started_at' null kar diya hai, so page reload karne par
+        // code wapis Step 3 me aayega -> time check fail hoga ya start_at null milega ->
+        // aur wo automatically Step 1 (Button View) dikha dega.
         window.location.reload();
     }
 
@@ -209,7 +210,9 @@
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
-            setTimeout(()=>window.close(), 5000);
+            
+            // --- AUTO CLOSE REMOVED ---
+            // Ab user khud close karega
 
         } catch(e) { showError("Verification Failed", e); }
     }
