@@ -1,58 +1,138 @@
-<!DOCTYPE html><html lang="en">
+<!DOCTYPE html>
+<html lang="en">
 <head>
-  <meta charset="utf-8" />
-  <meta name="viewport" content="width=device-width,initial-scale=1" />
-  <title>Device Verification</title>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
-  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
-  <style>
-    /* CSS Styles */
-    :root{ --page-bg:#eef3f6; --muted:#475569; --accent:#2f9e44; --danger:#e11d48; --mono: ui-monospace, monospace; }
-    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,-apple-system,sans-serif}
-    body{min-height:100vh;background:linear-gradient(180deg,var(--page-bg),#fbfdff);display:flex;align-items:center;justify-content:center;padding:18px;color:#0f172a}
-    .page{width:100%;max-width:420px;background:#fff;border-radius:28px;padding:30px;box-shadow: 0 24px 48px rgba(2,6,23,0.08);}
-    .icon-wrap{width:78px;height:78px;border-radius:14px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:40px}
-    h1{font-size:22px;text-align:center;margin-bottom:8px}
-    .subtitle{font-size:13px;color:var(--muted);text-align:center;margin-bottom:18px}
-    .message{background:#f8fafc;border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:18px}
-    .message .tickbox{width:44px;height:44px;border-radius:10px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:20px}
-    .info-area{background:#f1f5f9;padding:12px;border-radius:14px;}
-    .info-row{display:flex;justify-content:space-between;padding:8px}
-    .info-row .label{font-size:13px;color:var(--muted);font-weight:700}
-    .info-row .val{font-size:13px;font-family:var(--mono);font-weight:700}
-    .progress-area{margin-top:16px;background:#f1f5f9;padding:12px;border-radius:12px}
-    .progress{height:8px;background:#e2e8f0;border-radius:99px;margin-top:8px;overflow:hidden}
-    .progress-bar{height:100%;width:0%;background:#22c55e;transition:width linear}
-    .btn-close{width:100%;padding:14px;margin-top:18px;border-radius:14px;border:none;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.05);color:#ef4444;font-weight:700;cursor:pointer}
-    .copied::after{content:'Copied';position:absolute;background:#000;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;top:-20px;right:0}
-  </style>
+    <meta charset="utf-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
+    <title>Secure Device Verification</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+    <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
+    <style>
+        :root {
+            --primary: #0066FF; --success: #00C853; --error: #FF3D00; --warning: #FFAB00;
+            --bg-grad: linear-gradient(135deg, #f6f8fd 0%, #eef2f9 100%);
+            --card-bg: #ffffff; --text-dark: #1a1f36; --text-light: #697386;
+        }
+        * { margin: 0; padding: 0; box-sizing: border-box; font-family: 'Inter', sans-serif; -webkit-tap-highlight-color: transparent; }
+        body { min-height: 100vh; display: flex; align-items: center; justify-content: center; background: var(--bg-grad); padding: 20px; }
+
+        /* --- Main Card --- */
+        .verify-card {
+            background: var(--card-bg); width: 100%; max-width: 440px;
+            border-radius: 24px; padding: 40px 30px; text-align: center;
+            box-shadow: 0 20px 60px -15px rgba(0,0,0,0.1);
+            transform: translateY(0); transition:all 0.3s ease;
+        }
+
+        /* --- Header Icon & Title --- */
+        .icon-container {
+            width: 80px; height: 80px; margin: 0 auto 24px; border-radius: 50%;
+            display: flex; align-items: center; justify-content: center;
+            font-size: 36px; position: relative; transition: all 0.4s ease;
+        }
+        /* States colors */
+        .state-loading .icon-container { background: rgba(0, 102, 255, 0.1); color: var(--primary); }
+        .state-success .icon-container { background: rgba(0, 200, 83, 0.1); color: var(--success); }
+        .state-error .icon-container { background: rgba(255, 61, 0, 0.1); color: var(--error); }
+
+        /* Pulse Animation for loading */
+        .pulse::after {
+            content: ''; position: absolute; width: 100%; height: 100%; border-radius: 50%;
+            border: 2px solid currentColor; opacity: 0.6; animation: pulseAnim 1.5s infinite;
+        }
+        @keyframes pulseAnim { 0% { transform: scale(1); opacity: 0.6; } 100% { transform: scale(1.5); opacity: 0; } }
+
+        h1 { font-size: 22px; font-weight: 700; color: var(--text-dark); margin-bottom: 8px; }
+        p.subtitle { color: var(--text-light); font-size: 14px; line-height: 1.5; margin-bottom: 30px; }
+
+        /* --- Status Banner --- */
+        .status-banner {
+            background: #f8f9fc; border-radius: 12px; padding: 12px 16px;
+            display: flex; align-items: center; gap: 12px; margin-bottom: 25px;
+            font-weight: 500; font-size: 14px; text-align: left; transition: all 0.3s;
+        }
+        .state-success .status-banner { background: rgba(0, 200, 83, 0.08); color: #007a33; }
+        .state-error .status-banner { background: rgba(255, 61, 0, 0.08); color: #c62828; }
+
+        /* --- NEW TIMER SECTION --- */
+        .timer-section { display: none; /* Hidden initially */ margin-bottom: 30px; animation: slideUp 0.5s ease; }
+        .timer-label { font-size: 12px; font-weight: 700; color: var(--text-light); letter-spacing: 1px; margin-bottom: 12px; text-transform: uppercase; }
+        .timer-display {
+            display: flex; align-items: center; justify-content: center; gap: 10px;
+        }
+        .time-block {
+            background: #f0f4ff; border-radius: 12px; padding: 12px; min-width: 65px;
+            border: 1px solid rgba(0, 102, 255, 0.1);
+        }
+        .state-success .time-block { background: rgba(0, 200, 83, 0.05); border-color: rgba(0, 200, 83, 0.15); }
+        .time-val { display: block; font-size: 24px; font-weight: 800; color: var(--text-dark); font-variant-numeric: tabular-nums; }
+        .time-unit { font-size: 10px; font-weight: 600; color: var(--text-light); }
+        .time-sep { font-size: 24px; font-weight: 700; color: var(--text-light); margin-top: -15px; }
+
+        /* --- Details & Footer --- */
+        .details-box { display: none; /* Hidden initially */ background: #f8f9fc; border-radius: 16px; padding: 20px; margin-bottom: 25px; animation: slideUp 0.5s ease 0.1s both; }
+        .detail-row { display: flex; justify-content: space-between; font-size: 13px; margin-bottom: 8px; }
+        .detail-row:last-child { margin-bottom: 0; }
+        .detail-label { color: var(--text-light); font-weight: 600; }
+        .detail-val { font-family: monospace; font-weight: 700; color: var(--text-dark); }
+
+        .btn-close {
+            width: 100%; padding: 14px; border-radius: 12px; border: none;
+            background: var(--text-dark); color: white; font-weight: 700; font-size: 15px;
+            cursor: pointer; transition: 0.2s;
+        }
+        .btn-close:active { transform: scale(0.98); }
+        .auto-close-txt { font-size: 13px; color: var(--text-light); margin-bottom: 12px; display: none; }
+        
+        @keyframes slideUp { from { opacity: 0; transform: translateY(20px); } to { opacity: 1; transform: translateY(0); } }
+        /* Hidden elements */
+        .hidden { display: none !important; }
+    </style>
 </head>
-<body>
-  <div class="page">
-    <div id="topIcon" class="icon-wrap">⏳</div>
-    <h1 id="title">Verification Status</h1>
-    <div id="subtitle" class="subtitle">Checking verification code...</div>
-    
-    <div class="message">
-      <div id="msgIcon" class="tickbox">⏳</div>
-      <div id="msgText" class="msg">Checking verification...</div>
-    </div>
+<body class="state-loading"> <div class="verify-card">
+        <div id="iconWrapper" class="icon-container pulse">
+            <i id="mainIcon" class="fas fa-shield-alt"></i>
+        </div>
+        <h1 id="mainTitle">Verifying Device</h1>
+        <p id="subTitle" class="subtitle">Please wait while we securely validate your credentials.</p>
 
-    <div class="info-area">
-      <div class="info-row"><div class="label">Device ID:</div><div id="deviceId" class="val">Checking...</div></div>
-      <div class="info-row"><div class="label">User ID:</div><div id="userId" class="val">—</div></div>
-    </div>
+        <div id="statusBanner" class="status-banner">
+            <i id="msgIcon" class="fas fa-circle-notch fa-spin"></i>
+            <span id="msgText">Establishling secure connection...</span>
+        </div>
 
-    <div class="progress-area">
-      <div style="text-align:center;font-size:12px;color:#64748b">Auto-close in <strong id="countdown">5</strong>s</div>
-      <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
-    </div>
+        <div id="timerSection" class="timer-section">
+            <p class="timer-label">SESSION VALID FOR</p>
+            <div class="timer-display">
+                <div class="time-block"><span id="tHours" class="time-val">00</span><span class="time-unit">HOURS</span></div>
+                <div class="time-sep">:</div>
+                <div class="time-block"><span id="tMins" class="time-val">00</span><span class="time-unit">MINS</span></div>
+                <div class="time-sep">:</div>
+                <div class="time-block"><span id="tSecs" class="time-val">00</span><span class="time-unit">SECS</span></div>
+            </div>
+        </div>
 
-    <button id="closeBtn" class="btn-close">Close Window</button>
-  </div>
+        <div id="detailsBox" class="details-box">
+            <div class="detail-row">
+                <span class="detail-label">Device ID:</span>
+                <span id="deviceIdVal" class="detail-val">...</span>
+            </div>
+            <div class="detail-row">
+                <span class="detail-label">Session Token:</span>
+                <span id="tokenVal" class="detail-val">...</span>
+            </div>
+        </div>
+
+        <div class="footer">
+            <p id="autoCloseTxt" class="auto-close-txt">Closing window in <span id="closeCounter">5</span>s</p>
+            <button id="closeBtn" class="btn-close" onclick="closeWindow()">Close Window</button>
+        </div>
+    </div>
 
 <script>
-    // --- NEW FIREBASE CONFIGURATION ---
+    // --- FIREBASE CONFIG (DO NOT CHANGE) ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -62,157 +142,194 @@
       messagingSenderId: "201875395548",
       appId: "1:201875395548:web:00708191e109c2ba5bf519"
     };
-
-    if (!window.firebase) throw new Error('Firebase SDK not loaded');
-    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // UI Helpers
-    const els = {
-        top: document.getElementById('topIcon'),
+    // --- UI ELEMENTS ---
+    const ui = {
+        body: document.body,
+        iconWrap: document.getElementById('iconWrapper'),
+        mainIcon: document.getElementById('mainIcon'),
+        title: document.getElementById('mainTitle'),
+        sub: document.getElementById('subTitle'),
+        banner: document.getElementById('statusBanner'),
         msgIcon: document.getElementById('msgIcon'),
-        msg: document.getElementById('msgText'),
-        title: document.getElementById('title'),
-        sub: document.getElementById('subtitle'),
-        dev: document.getElementById('deviceId'),
-        uid: document.getElementById('userId'),
-        prog: document.getElementById('progressBar'),
-        count: document.getElementById('countdown')
+        msgText: document.getElementById('msgText'),
+        timerSec: document.getElementById('timerSection'),
+        details: document.getElementById('detailsBox'),
+        didVal: document.getElementById('deviceIdVal'),
+        tokVal: document.getElementById('tokenVal'),
+        closeTxt: document.getElementById('autoCloseTxt'),
+        closeCount: document.getElementById('closeCounter'),
+        // Timer digits
+        th: document.getElementById('tHours'),
+        tm: document.getElementById('tMins'),
+        ts: document.getElementById('tSecs')
     };
 
-    function setText(el, t){ if(el) el.textContent = t || '—'; }
-    function setIcons(s){
-        const i = s==='loading'?'⏳':(s==='success'?'✔':(s==='used'?'🚫':'❌'));
-        setText(els.top, i); setText(els.msgIcon, i);
-        els.top.style.background = s==='success'?'#f0fdf4':(s==='loading'?'#f1f5f9':'#fef2f2');
-        els.top.style.color = s==='success'?'#16a34a':(s==='loading'?'#64748b':'#dc2626');
-    }
-    
-    function setError(msg){ 
-        setIcons('error'); 
-        setText(els.title, 'Verification Failed'); 
-        setText(els.sub, msg); 
-        setText(els.msg, msg); 
-    }
-    
-    function setSuccess(){
-        setIcons('success');
-        setText(els.title, 'Verification Successful!');
-        setText(els.sub, 'Access granted.');
-        setText(els.msg, 'You can return to the App.');
-    }
-
-    function setAlreadyVerified(expiryTime){
-        setIcons('success');
-        setText(els.title, 'Already Verified');
-        let txt = 'Device remembered.';
-        if(expiryTime){
-             const min = Math.floor((expiryTime - Date.now())/60000);
-             if(min > 0) txt = `Valid for ${min} mins.`;
-        }
-        setText(els.sub, txt);
-        setText(els.msg, 'Verification Active.');
-    }
-
-    // Countdown Logic
-    let interval;
-    function startCountdown(sec){
-        if(interval) clearInterval(interval);
-        els.prog.style.transition='none'; els.prog.style.width='0%';
-        setTimeout(()=>{ els.prog.style.transition=`width ${sec}s linear`; els.prog.style.width='100%'; },50);
-        let c = sec; setText(els.count, c);
-        interval = setInterval(()=>{ c--; setText(els.count, c); if(c<=0){ clearInterval(interval); window.open('','_self').close(); } },1000);
-    }
-    document.getElementById('closeBtn').addEventListener('click', ()=> window.open('','_self').close());
-
-    // --- MAIN LOGIC ---
-    async function verify(){
+    // --- UI STATE HELPERS ---
+    function set UIState(state) {
+        ui.body.className = state; // Sets 'state-loading', 'state-success', or 'state-error'
         
-        // 1. CHECK LOCAL STORAGE (Previous Verification)
-        const saved = localStorage.getItem('my_app_verification');
-        if(saved){
-            const parsed = JSON.parse(saved);
+        if(state === 'state-loading'){
+            ui.iconWrap.classList.add('pulse');
+            ui.mainIcon.className = 'fas fa-shield-alt';
+            ui.msgIcon.className = 'fas fa-circle-notch fa-spin';
+        } else if (state === 'state-success') {
+            ui.iconWrap.classList.remove('pulse');
+            ui.mainIcon.className = 'fas fa-check';
+            ui.msgIcon.className = 'fas fa-check-circle';
+        } else {
+            ui.iconWrap.classList.remove('pulse');
+            ui.mainIcon.className = 'fas fa-times';
+            ui.msgIcon.className = 'fas fa-exclamation-triangle';
+        }
+    }
+
+    function setError(title, msg) {
+        UIState = 'state-error';
+        ui.title.textContent = title;
+        ui.sub.textContent = "Verification could not be completed.";
+        ui.msgText.textContent = msg;
+        ui.timerSec.style.display = 'none'; // Hide timer on error
+    }
+
+    // --- TIMER LOGIC ---
+    let sessionInterval;
+    function startSessionTimer(expiryTimestamp) {
+        if(sessionInterval) clearInterval(sessionInterval);
+        ui.timerSec.style.display = 'block'; // Show timer section
+
+        function updateTimer() {
             const now = Date.now();
-            
-            // Check Expiry (Agar saved time expire ho gaya hai)
-            if(parsed.expiresAt && now > parsed.expiresAt){
-                // Expired: Clear Data & Show Error
-                localStorage.removeItem('my_app_verification');
-                setError('Code Expired'); // Direct Error Screen
+            const distance = expiryTimestamp - now;
+
+            if (distance < 0) {
+                clearInterval(sessionInterval);
+                ui.th.textContent = "00"; ui.tm.textContent = "00"; ui.ts.textContent = "00";
+                setError("Session Expired", "Please verify again from the app.");
                 return;
             }
-            
-            // Valid: Show Success
-            setText(els.dev, parsed.deviceId);
-            setText(els.uid, parsed.token);
-            setAlreadyVerified(parsed.expiresAt);
-            return;
+
+            const hours = Math.floor((distance % (1000 * 60 * 60 * 24)) / (1000 * 60 * 60));
+            const minutes = Math.floor((distance % (1000 * 60 * 60)) / (1000 * 60));
+            const seconds = Math.floor((distance % (1000 * 60)) / 1000);
+
+            ui.th.textContent = String(hours).padStart(2, '0');
+            ui.tm.textContent = String(minutes).padStart(2, '0');
+            ui.ts.textContent = String(seconds).padStart(2, '0');
         }
 
-        // 2. READ URL PARAMS (Hash or Search)
-        let qs = window.location.search;
-        if(!qs && window.location.hash){
-            qs = window.location.hash.substring(1);
-            if(qs.indexOf('?')!==-1) qs = qs.split('?')[1];
+        updateTimer(); // Run immediately
+        sessionInterval = setInterval(updateTimer, 1000);
+    }
+
+    function setSuccessUI(title, subtitle, msg, deviceId, token, expiryTime, isFresh) {
+        UIState = 'state-success';
+        ui.title.textContent = title;
+        ui.sub.textContent = subtitle;
+        ui.msgText.textContent = msg;
+        ui.didVal.textContent = deviceId;
+        ui.tokVal.textContent = token;
+        ui.details.style.display = 'block'; // Show details
+
+        // Start the H:M:S timer
+        if(expiryTime) startSessionTimer(expiryTime);
+
+        // Only auto-close if it's a fresh verification
+        if(isFresh) {
+            ui.closeTxt.style.display = 'block';
+            let c = 5;
+            const int = setInterval(() => {
+                c--; ui.closeCount.textContent = c;
+                if(c<=0){ clearInterval(int); closeWindow(); }
+            }, 1000);
         }
+    }
+
+    function closeWindow(){ try{window.open('','_self').close();}catch(e){window.location.href='about:blank';} }
+
+    // --- MAIN VERIFICATION LOGIC (SECURE) ---
+    async function verify() {
+        // 1. CHECK LOCAL STORAGE + SERVER RE-VALIDATION
+        const saved = localStorage.getItem('my_app_verification');
+        if (saved) {
+            ui.msgText.textContent = "Re-validating existing session...";
+            try {
+                const parsed = JSON.parse(saved);
+                const now = Date.now();
+                if (parsed.expiresAt && now > parsed.expiresAt) throw new Error("Expired");
+
+                // Server Validation Check
+                let checkSlotId = parsed.slotId;
+                if (!checkSlotId) {
+                    let qs = window.location.hash.substring(1); if (qs.indexOf('?') !== -1) qs = qs.split('?')[1];
+                    checkSlotId = new URLSearchParams(qs).get('uid');
+                }
+
+                if (checkSlotId && parsed.deviceId) {
+                    const devSnap = await database.ref(`users/${checkSlotId}/devices/${parsed.deviceId}`).once('value');
+                    if (!devSnap.exists()) throw new Error("Revoked");
+                    const devData = devSnap.val();
+                    if (devData.expiry_time && now > devData.expiry_time) throw new Error("Expired on Server");
+                }
+
+                // Success (Already Verified)
+                setSuccessUI("Already Verified", "Your device is securely linked.", "Verification is active.", parsed.deviceId, parsed.token, parsed.expiresAt, false);
+                return;
+            } catch (e) {
+                localStorage.removeItem('my_app_verification'); // Invalid data, clear it
+            }
+        }
+
+        // 2. PARSE URL (HASH SUPPORT)
+        let qs = window.location.search || window.location.hash.substring(1);
+        if (qs.indexOf('?') !== -1) qs = qs.split('?')[1];
         const p = new URLSearchParams(qs);
-        const did = p.get('device');
-        const code = p.get('code');
-        const uid = p.get('uid');
+        const did = p.get('device'); const code = p.get('code'); const uid = p.get('uid');
 
         // 3. CLEAN URL
-        if(window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
+        if (window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
 
-        // 4. VERIFY FRESH LINK
-        if(!did || !code || !uid){ 
-            setError('Invalid Link'); // No params & no local storage = Invalid
-            return; 
-        }
+        if (!did || !code || !uid) { setError("Invalid Link", "Missing required parameters."); return; }
 
-        try{
-            setIcons('loading');
-            // Note: Make sure your new Firebase Database has "users" node
+        // 4. VERIFY FRESH CODE
+        try {
+            ui.msgText.textContent = "Validating code with server...";
             const ref = database.ref(`users/${uid}/verification_codes/${code}`);
             const snap = await ref.once('value');
             const data = snap.val();
 
-            if(!data){ setError('Invalid Code'); return; }
-            if(data.used){ 
-                setIcons('used'); 
-                setText(els.title, 'Security Alert'); 
-                setText(els.sub, 'Code already used.'); 
-                setText(els.msg, 'Code Used'); 
-                return; 
-            }
-            if(data.deviceId !== did){ setError('Device Mismatch'); return; }
-            
-            const now = Date.now();
-            if(data.expires_at && now > data.expires_at){ setError('Code Expired'); return; }
+            if (!data) { setError("Verification Failed", "Invalid or non-existent code."); return; }
+            if (data.used) { setError("Code Already Used", "This verification code has already been redeemed."); return; }
+            if (data.deviceId !== did) { setError("Device Mismatch", "This code is not meant for this device."); return; }
+            if (data.expires_at && Date.now() > data.expires_at) { setError("Code Expired", "The verification time window has passed."); return; }
 
-            // Success Update
-            await ref.update({ used: true, used_at: now });
-            await database.ref(`users/${uid}/devices/${did}`).set({ verification_time: now, last_code: code });
+            // Mark Used
+            await ref.update({ used: true, used_at: Date.now() });
+
+            // Calculate Expiry based on Config
+            let duration = 86400000; // 24h default
+            const confSnap = await database.ref(`users/${uid}/config`).once('value');
+            const conf = confSnap.val();
+            if (conf) {
+                if (conf.verification_minutes) duration = conf.verification_minutes * 60000;
+                else if (conf.verification_hours) duration = conf.verification_hours * 3600000;
+            }
+            const finalExpiry = Date.now() + duration;
+
+            // Update Device Status
+            await database.ref(`users/${uid}/devices/${did}`).set({ verification_time: Date.now(), expiry_time: finalExpiry, last_code: code });
 
             const token = data.access_token || Math.random().toString(36).slice(2);
-            
-            // Save to Storage (with Expiry from Firebase)
-            const expiry = data.expires_at || (now + 86400000); // Fallback 24h
-            localStorage.setItem('my_app_verification', JSON.stringify({
-                deviceId: did,
-                token: token,
-                expiresAt: expiry,
-                timestamp: now
-            }));
+            // Save Local Session
+            localStorage.setItem('my_app_verification', JSON.stringify({ slotId: uid, deviceId: did, token: token, expiresAt: finalExpiry, timestamp: Date.now() }));
 
-            // UI Update
-            setText(els.dev, did);
-            setText(els.uid, token);
-            setSuccess();
-            startCountdown(5);
+            // Success (Fresh Verification)
+            setSuccessUI("Verification Successful!", "You can now return to the app.", "Access granted successfully.", did, token, finalExpiry, true);
 
-        }catch(e){
-            console.error(e);
-            setError('Database Error');
+        } catch (e) {
+            console.error(e); setError("System Error", "Connection to database failed.");
         }
     }
 
