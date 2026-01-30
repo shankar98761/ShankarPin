@@ -31,9 +31,9 @@
 
     <div id="viewStep1" class="card">
         <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
-        <h1>Almost There!</h1>
-        <p>Click below to complete the security check via our partner.</p>
-        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">CONTINUE VERIFICATION</button>
+        <h1>Security Check</h1>
+        <p>Click below to complete the verification step.</p>
+        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">VERIFY NOW</button>
     </div>
 
     <div id="viewFinal" class="card">
@@ -45,10 +45,10 @@
             <div class="t-val" id="timerDisplay">00:00:00</div>
         </div>
         <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Close Window</button>
+        <button class="btn" id="retryBtn" onclick="retryProcess()" style="display:none; background:#dc2626; margin-top:10px;">Retry Verification</button>
     </div>
 
 <script>
-    // --- FIREBASE CONFIG (UPDATE IF NEEDED) ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -62,66 +62,109 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
-    // DOM Elements
     const vLoad=document.getElementById('viewLoad'), vStep1=document.getElementById('viewStep1'), vFinal=document.getElementById('viewFinal');
     const finalTitle=document.getElementById('finalTitle'), finalDesc=document.getElementById('finalDesc'), finalIcon=document.getElementById('finalIcon');
-    
     let shortenerUrl = "";
 
+    // --- SECURITY SETTING: Minimum Seconds Required ---
+    const MIN_SECONDS_REQUIRED = 15; // User must take at least 15 seconds
+
     async function init() {
-        // 1. URL se Params nikalo (Supports # and ?)
         let qs = window.location.hash.substring(1) || window.location.search;
         if(qs.indexOf('?')!==-1) qs = qs.split('?')[1];
         if(qs.indexOf('#')!==-1) qs = qs.split('#')[1];
-        
         const p = new URLSearchParams(qs);
+        
         const did = p.get('device'), code = p.get('code'), uid = p.get('uid');
+        const isSecretParam = p.get('v') === '1';
 
-        // 2. SCENARIO A: App se Direct Aaya hai (Params mile)
+        // 1. CHECK ALREADY VERIFIED
+        const localSaved = localStorage.getItem('my_app_verification');
+        if(localSaved) {
+            const ld = JSON.parse(localSaved);
+            if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; }
+        }
+
+        // 2. APP ENTRY (First Time)
         if(did && code && uid) {
-            // Data Browser me PERMANENTLY save karo (localStorage)
             localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
-            
-            // Firebase se Shortener Link nikalo
             try {
                 const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
                 if(conf && conf.shortener_api) {
                     shortenerUrl = conf.shortener_api;
-                    showView(vStep1); // Button dikhao
+                    showView(vStep1);
                 } else {
-                    // Fallback: Agar shortener set nahi hai, direct verify karo
-                    verifyUser(did, code, uid);
+                    verifyUser(did, code, uid); 
                 }
-            } catch(e) { alert("Connection Error"); }
+            } catch(e) { alert("Network Error"); }
             return;
         }
 
-        // 3. SCENARIO B: Shortener se wapis aaya hai (Params gayab hain)
-        const saved = localStorage.getItem('pending_verif');
-        if(saved) {
-            // Saved data nikalo
-            const data = JSON.parse(saved);
+        // 3. RETURN FROM SHORTENER
+        const pending = localStorage.getItem('pending_verif');
+        if(pending) {
             
-            // Verification start karo
-            verifyUser(data.did, data.code, data.uid);
-            return;
-        }
-
-        // 4. SCENARIO C: Pehle se verified hai
-        const localSaved = localStorage.getItem('my_app_verification');
-        if(localSaved) {
-            const ld = JSON.parse(localSaved);
-            if(Date.now() < ld.expiry) {
-                showSuccess(ld.expiry, true);
+            // --- TIME TRAP CHECK (ANTI-BYPASS) ---
+            const startTime = localStorage.getItem('verify_start_time');
+            
+            if(!startTime) {
+                // User ne button click hi nahi kiya, direct link open kiya hai
+                showError("Access Denied", "Please start verification from the App.");
                 return;
             }
+
+            const timeTaken = (Date.now() - parseInt(startTime)) / 1000; // in seconds
+
+            if(isSecretParam) {
+                // Secret Link hai, lekin Time Check karo
+                if(timeTaken < MIN_SECONDS_REQUIRED) {
+                     // CAUGHT: User bahut jaldi aa gaya (Shortcut/Hack)
+                     showError("Verification Failed", `Process too fast (${Math.floor(timeTaken)}s). Please complete the Shortener properly.`);
+                     // Reset time to prevent retry loop without clicking button
+                     localStorage.removeItem('verify_start_time');
+                     document.getElementById('retryBtn').style.display = 'block';
+                     return;
+                }
+
+                // Time OK, Secret OK -> Verify
+                const data = JSON.parse(pending);
+                verifyUser(data.did, data.code, data.uid);
+            } else {
+                // Secret Missing (Back button dabaya) -> Show Button Again
+                const data = JSON.parse(pending);
+                try {
+                     const conf = (await db.ref(`users/${data.uid}/config`).once('value')).val();
+                     if(conf) shortenerUrl = conf.shortener_api;
+                } catch(e){}
+                showView(vStep1);
+            }
+            return;
         }
 
-        showError("Invalid Link", "Data not found. Please open link from App again.");
+        showError("Invalid Session", "Please open this page from the App.");
     }
 
     function goToShortener() {
-        if(shortenerUrl) window.location.href = shortenerUrl;
+        if(shortenerUrl) {
+            // --- SET START TIME (TRAP ACTIVATED) ---
+            localStorage.setItem('verify_start_time', Date.now());
+            window.location.href = shortenerUrl;
+        }
+    }
+
+    function retryProcess() {
+        // Retry ke liye wapis Step 1 par bhejo
+        localStorage.removeItem('verify_start_time');
+        const pending = localStorage.getItem('pending_verif');
+        if(pending) {
+             const data = JSON.parse(pending);
+             // URL saaf karo taaki ?v=1 hat jaye
+             window.history.replaceState({}, document.title, window.location.pathname);
+             // Reload config logic
+             init();
+        } else {
+             window.location.reload();
+        }
     }
 
     async function verifyUser(did, code, uid) {
@@ -130,30 +173,24 @@
             const ref = db.ref(`users/${uid}/verification_codes/${code}`);
             const data = (await ref.once('value')).val();
 
-            // Code valid hai?
             if(!data) throw "Invalid Code";
             if(data.used) throw "Code Already Used";
             if(data.expires_at && Date.now() > data.expires_at) throw "Code Expired";
 
-            // Mark Used
             await ref.update({ used:true, used_at:Date.now() });
 
-            // Calculate Expiry
             let dur = 86400000;
             const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
             if(conf && conf.verification_minutes) dur = conf.verification_minutes * 60000;
             const expiry = Date.now() + dur;
 
-            // Update Device
             await db.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
-            // SUCCESS! Pending delete karo, Verified save karo
             localStorage.removeItem('pending_verif');
+            localStorage.removeItem('verify_start_time'); // Cleanup
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
-            
-            // 5 second me auto close
             setTimeout(()=>window.close(), 5000);
 
         } catch(e) { showError("Verification Failed", e); }
@@ -169,6 +206,7 @@
         finalDesc.innerText = "You can return to the app now.";
         document.getElementById('timerArea').style.display = 'block';
         document.getElementById('finalBtn').style.display = 'block';
+        document.getElementById('retryBtn').style.display = 'none';
         startTimer(expiry);
     }
 
@@ -177,6 +215,7 @@
         document.body.classList.add('state-error');
         finalIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
         finalTitle.innerText = t; finalDesc.innerText = m;
+        document.getElementById('retryBtn').style.display = 'none'; // Error me retry mat dikhao unless specific logic
     }
 
     function startTimer(exp) {
