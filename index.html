@@ -3,57 +3,139 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Secure Verification</title>
+    <title>Secure Gateway</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
-    <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;600;700;800&display=swap" rel="stylesheet">
+    <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
+
     <style>
-        :root { --primary:#2563eb; --bg:#f1f5f9; --card:#fff; --text:#1e293b; }
-        body { margin:0; padding:16px; font-family:'Inter',sans-serif; background:var(--bg); min-height:100vh; display:flex; align-items:center; justify-content:center; }
-        .card { background:var(--card); width:100%; max-width:400px; padding:32px 24px; border-radius:24px; text-align:center; box-shadow:0 10px 30px rgba(0,0,0,0.08); display:none; }
-        .card.active { display:block; animation:fadeIn 0.5s ease; }
-        .icon-box { width:72px; height:72px; border-radius:50%; margin:0 auto 20px; display:flex; align-items:center; justify-content:center; font-size:32px; background:#eff6ff; color:var(--primary); }
-        h1 { font-size:20px; margin-bottom:8px; color:var(--text); }
-        p { font-size:14px; color:#64748b; line-height:1.5; margin-bottom:24px; }
-        .btn { width:100%; padding:14px; border-radius:14px; border:none; font-weight:700; background:var(--primary); color:#fff; cursor:pointer; font-size:15px; }
-        .btn:disabled { background:#94a3b8; cursor:wait; }
-        .loader { width:24px; height:24px; border:3px solid #e2e8f0; border-top-color:var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
-        @keyframes spin { to { transform:rotate(360deg); } } @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        .state-success .icon-box { background:#dcfce7; color:#16a34a; }
-        .state-error .icon-box { background:#fef2f2; color:#dc2626; }
-        .timer-box { background:#f8fafc; padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid #e2e8f0; display:none; }
-        .t-val { font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; }
-        .device-id-display { font-size: 11px; color: #64748b; margin-top: 10px; font-family: monospace; background: #f1f5f9; padding: 5px 10px; border-radius: 6px; display: inline-block; }
+        :root {
+            --bg-dark: #09090b;
+            --glass: rgba(255, 255, 255, 0.03);
+            --border: rgba(255, 255, 255, 0.08);
+            --neon-blue: #3b82f6;
+            --neon-green: #10b981;
+            --neon-red: #ef4444;
+            --text-main: #ffffff;
+            --text-muted: #a1a1aa;
+        }
+
+        body {
+            margin: 0; padding: 20px;
+            font-family: 'Outfit', sans-serif;
+            background-color: var(--bg-dark);
+            background-image: 
+                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
+                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
+            min-height: 100vh;
+            display: flex; align-items: center; justify-content: center;
+            color: var(--text-main);
+        }
+
+        /* --- Dark Glossy Card --- */
+        .card {
+            background: var(--glass);
+            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
+            border: 1px solid var(--border);
+            width: 100%; max-width: 380px;
+            padding: 40px 30px;
+            border-radius: 24px;
+            text-align: center;
+            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
+            display: none; /* Hidden by default */
+            animation: floatUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
+        }
+        .card.active { display: block; }
+
+        @keyframes floatUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
+
+        /* --- Icon Glow --- */
+        .icon-wrapper {
+            width: 80px; height: 80px; margin: 0 auto 25px;
+            border-radius: 50%;
+            background: rgba(255, 255, 255, 0.03);
+            border: 1px solid var(--border);
+            display: flex; align-items: center; justify-content: center;
+            font-size: 32px;
+            box-shadow: 0 0 30px rgba(0,0,0,0.2);
+            position: relative;
+        }
+        .icon-wrapper::after { content:''; position: absolute; inset: -5px; border-radius: 50%; padding: 2px; background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
+
+        .status-loading { color: var(--neon-blue); text-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
+        .status-success { color: var(--neon-green); text-shadow: 0 0 15px rgba(16, 185, 129, 0.5); border-color: rgba(16, 185, 129, 0.3); }
+        .status-error { color: var(--neon-red); text-shadow: 0 0 15px rgba(239, 68, 68, 0.5); border-color: rgba(239, 68, 68, 0.3); }
+
+        h1 { font-size: 22px; font-weight: 600; margin-bottom: 10px; letter-spacing: -0.5px; }
+        p { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 30px; font-weight: 300; }
+
+        /* --- Buttons --- */
+        .btn {
+            width: 100%; padding: 16px;
+            border-radius: 14px; border: none;
+            font-weight: 600; font-size: 15px; letter-spacing: 0.5px;
+            cursor: pointer; transition: all 0.3s ease;
+            background: linear-gradient(135deg, var(--neon-blue), #2563eb);
+            color: white;
+            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
+            position: relative; overflow: hidden;
+        }
+        .btn::before { content:''; position: absolute; top:0; left:-100%; width:100%; height:100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transition: 0.5s; }
+        .btn:hover::before { left: 100%; }
+        .btn:hover { transform: translateY(-2px); box-shadow: 0 15px 30px -5px rgba(37, 99, 235, 0.5); }
+        .btn:active { transform: translateY(0); }
+        .btn:disabled { background: #3f3f46; color: #71717a; cursor: not-allowed; box-shadow: none; }
+
+        .btn-retry { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 10px 20px -5px rgba(220, 38, 38, 0.4); margin-top: 15px; }
+        
+        /* --- Timer Display --- */
+        .timer-container {
+            background: rgba(0,0,0,0.3); border: 1px solid var(--border);
+            border-radius: 16px; padding: 20px; margin-bottom: 25px;
+        }
+        .timer-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 2px; margin-bottom: 8px; font-weight: 700; }
+        .timer-val { font-size: 28px; font-weight: 700; color: var(--neon-green); font-family: monospace; letter-spacing: 2px; text-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
+
+        .device-tag { font-size: 11px; background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 20px; display: inline-block; color: var(--text-muted); font-family: monospace; border: 1px solid var(--border); }
+
+        /* --- Loader --- */
+        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--neon-blue); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
+        @keyframes spin { 100% { transform: rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <div id="viewLoad" class="card active"><div class="loader"></div><p style="margin-top:15px">Security Check...</p></div>
+    <div id="viewLoad" class="card active">
+        <div class="spinner"></div>
+        <p style="margin:0">Secure Handshake...</p>
+    </div>
 
     <div id="viewStep1" class="card">
-        <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
-        <h1>Security Check</h1>
-        <p>Click below to complete the verification step.</p>
-        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">VERIFY NOW</button>
+        <div class="icon-wrapper status-loading"><i class="fas fa-shield-halved"></i></div>
+        <h1>Device Verification</h1>
+        <p>Complete the security check to unlock premium features on your device.</p>
+        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">VERIFY ACCESS</button>
     </div>
 
     <div id="viewFinal" class="card">
-        <div class="icon-box" id="finalIcon"><i class="fas fa-circle-notch fa-spin"></i></div>
-        <h1 id="finalTitle">Verifying...</h1>
-        <p id="finalDesc">Please wait while we confirm your status.</p>
+        <div class="icon-wrapper" id="finalIcon"></div>
+        <h1 id="finalTitle"></h1>
+        <p id="finalDesc"></p>
         
-        <div id="timerArea" class="timer-box">
-            <div style="font-size:10px;text-transform:uppercase;color:#64748b;margin-bottom:5px;letter-spacing:1px;font-weight:700;">ACCESS GRANTED FOR</div>
-            <div class="t-val" id="timerDisplay">00:00:00</div>
+        <div id="timerArea" class="timer-container" style="display:none;">
+            <div class="timer-label">ACCESS GRANTED FOR</div>
+            <div class="timer-val" id="timerDisplay">00:00:00</div>
         </div>
-        <div id="didDisplay" class="device-id-display" style="display:none;">ID: ...</div>
-        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none; margin-top:20px;">Close Window</button>
-        <button class="btn" id="retryBtn" onclick="retryProcess()" style="display:none; background:#dc2626; margin-top:20px;">Retry Verification</button>
+
+        <div id="didDisplay" class="device-tag" style="display:none;"></div>
+
+        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none; margin-top:20px;">Return to App</button>
+        <button class="btn btn-retry" id="retryBtn" onclick="retryProcess()" style="display:none;">Retry Verification</button>
     </div>
 
 <script>
-    // --- UPDATE YOUR CONFIG HERE ---
+    // --- UPDATE YOUR FIREBASE CONFIG HERE ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -67,12 +149,25 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    const MIN_SECONDS_REQUIRED = 30; // Backup Client Check
+    // --- CONFIGURATION ---
+    const MIN_SECONDS_REQUIRED = 45; // Updated to 45 Seconds
     
-    const vLoad=document.getElementById('viewLoad'), vStep1=document.getElementById('viewStep1'), vFinal=document.getElementById('viewFinal');
-    const finalTitle=document.getElementById('finalTitle'), finalDesc=document.getElementById('finalDesc'), finalIcon=document.getElementById('finalIcon');
+    // UI Elements
+    const views = { load: document.getElementById('viewLoad'), step1: document.getElementById('viewStep1'), final: document.getElementById('viewFinal') };
+    const els = {
+        icon: document.getElementById('finalIcon'),
+        title: document.getElementById('finalTitle'),
+        desc: document.getElementById('finalDesc'),
+        timerArea: document.getElementById('timerArea'),
+        timerDisp: document.getElementById('timerDisplay'),
+        didDisp: document.getElementById('didDisplay'),
+        btnFinal: document.getElementById('finalBtn'),
+        btnRetry: document.getElementById('retryBtn'),
+        btnStart: document.getElementById('btnVerifyLink')
+    };
+    
     let shortenerUrl = "";
-    
+
     function getParam(name) {
         const urlParams = new URLSearchParams(window.location.search);
         const hashParams = new URLSearchParams(window.location.hash.substring(1));
@@ -90,6 +185,7 @@
         const did = getParam('device'); const code = getParam('code'); const uid = getParam('uid'); const urlKey = getParam('key'); 
         if(did || code || uid || urlKey) cleanAddressBar();
 
+        // 1. Check LocalStorage (Already Verified)
         const localSaved = localStorage.getItem('my_app_verification');
         if(localSaved) {
             try {
@@ -98,134 +194,173 @@
             } catch(e) { localStorage.removeItem('my_app_verification'); }
         }
 
+        // 2. Fresh Entry from App
         if(did && code && uid) {
             localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
             try {
-                const confSnap = await database.ref(`users/${uid}/config`).once('value');
-                const conf = confSnap.val();
+                const conf = (await database.ref(`users/${uid}/config`).once('value')).val();
                 if(conf && conf.shortener_api) {
                     shortenerUrl = conf.shortener_api;
-                    showView(vStep1);
+                    showView('step1');
                 } else {
-                    verifyUser(did, code, uid); 
+                    verifyUser(did, code, uid); // Fallback
                 }
-            } catch(e) { alert("Connection Error."); showView(vStep1); }
+            } catch(e) { showView('step1'); } // Network error? Show retry button
             return;
         }
 
+        // 3. Return from Shortener (Validate)
         const pending = localStorage.getItem('pending_verif');
         if(pending) {
             const data = JSON.parse(pending);
             try {
+                // Fetch Config for Secret Key
                 const confSnap = await database.ref(`users/${data.uid}/config`).once('value');
                 const conf = confSnap.val();
-                const realSecret = conf.secret_key || 'v=1';
+                
+                // --- SECURITY: Key Check ---
+                const realSecret = (conf && conf.secret_key) ? conf.secret_key : 'v=1';
                 if(urlKey !== realSecret) {
-                    showError("Access Denied", "Invalid Key. Please restart.");
+                    // SILENT RESET: Invalid key -> Show Step 1
                     if(conf) shortenerUrl = conf.shortener_api;
+                    showView('step1');
                     return;
                 }
-                const codeRef = database.ref(`users/${data.uid}/verification_codes/${data.code}`);
-                const snap = await codeRef.once('value');
-                const codeData = snap.val();
 
-                if(!codeData) { showError("Invalid Session", "Restart required."); return; }
-                if(!codeData.started_at) {
-                    showError("Access Denied", "Please click 'VERIFY NOW' button first.");
-                    setTimeout(() => { showView(vStep1); }, 2000);
-                    if(conf) shortenerUrl = conf.shortener_api;
-                    return;
+                // --- SECURITY: Server Time Trap ---
+                const codeRef = database.ref(`users/${data.uid}/verification_codes/${data.code}`);
+                const codeData = (await codeRef.once('value')).val();
+
+                if(!codeData) { showView('step1'); return; } // Invalid code
+                if(!codeData.started_at) { showView('step1'); return; } // Direct link open (No click)
+
+                const timeTaken = (Date.now() - codeData.started_at) / 1000;
+                
+                // 45 Seconds Check
+                if(timeTaken < MIN_SECONDS_REQUIRED) {
+                     showError("Process Too Fast", "Please complete the shortener process properly. Do not skip.");
+                     await codeRef.update({ started_at: null }); // Force restart
+                     return;
                 }
+
+                // All Valid
                 verifyUser(data.did, data.code, data.uid);
+
             } catch(e) { showError("System Error", e.message); }
             return;
         }
-        showError("Invalid Link", "Please open from App.");
+
+        // Nothing found
+        showError("Link Expired", "Please open this page from the App again.");
     }
 
     async function goToShortener() {
         if(!shortenerUrl) { window.location.reload(); return; }
-        document.getElementById('btnVerifyLink').innerText = "Processing...";
-        document.getElementById('btnVerifyLink').disabled = true;
+        
+        els.btnStart.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing...';
+        els.btnStart.disabled = true;
+
         const pending = localStorage.getItem('pending_verif');
         if(pending) {
             const data = JSON.parse(pending);
             try {
-                await database.ref(`users/${data.uid}/verification_codes/${data.code}`).update({ started_at: firebase.database.ServerValue.TIMESTAMP });
+                // Save Server Timestamp
+                await database.ref(`users/${data.uid}/verification_codes/${data.code}`).update({
+                    started_at: firebase.database.ServerValue.TIMESTAMP
+                });
                 window.location.href = shortenerUrl;
             } catch(e) {
-                alert("Connection Error.");
-                document.getElementById('btnVerifyLink').disabled = false;
+                alert("Connection Failed. Try Again.");
+                els.btnStart.innerHTML = "VERIFY ACCESS";
+                els.btnStart.disabled = false;
             }
         }
     }
 
-    function retryProcess() { window.location.reload(); }
+    function retryProcess() {
+        let clean = window.location.href.split('?')[0].split('#')[0];
+        window.history.replaceState({}, document.title, clean);
+        window.location.reload();
+    }
 
     async function verifyUser(did, code, uid) {
-        showView(vFinal);
+        showView('final');
+        els.icon.className = "icon-wrapper status-loading";
+        els.icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        els.title.innerText = "Finalizing...";
+        els.desc.innerText = "Connecting to secure server...";
+
         try {
             const ref = database.ref(`users/${uid}/verification_codes/${code}`);
-            const snap = await ref.once('value');
-            const data = snap.val();
-
-            if(!data) throw "Invalid Code";
-            if(data.used) throw "Already Verified";
-
-            // --- SERVER SIDE LOCK CHECK ---
+            
+            // Server-Side Lock Check (Firebase Rules will block if < 45s)
             try {
                 await ref.update({ used: true, used_at: firebase.database.ServerValue.TIMESTAMP });
             } catch(err) {
-                if(err.code === 'PERMISSION_DENIED') {
-                    throw "Please wait! Complete the shortener properly.";
-                } else { throw err; }
+                if(err.code === 'PERMISSION_DENIED') throw "Please wait! Do not skip the timer.";
+                else throw err;
             }
 
+            // Expiry
             let dur = 86400000;
             const conf = (await database.ref(`users/${uid}/config`).once('value')).val();
             if(conf && conf.verification_minutes) dur = conf.verification_minutes * 60000;
+            
             const expiry = Date.now() + dur;
-
             await database.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
+
             localStorage.removeItem('pending_verif');
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
+
             showSuccess(expiry, did);
 
         } catch(e) { 
             let msg = e.message || e;
-            if(msg.includes("wait") || msg.includes("shortener")) {
-                 showError("Too Fast", "Server rejected verification. Did you skip the shortener?");
-            } else { showError("Verification Failed", msg); }
+            if(msg.includes("wait")) showError("Too Fast", "Server rejected. Did you skip the shortener?");
+            else showError("Verification Failed", msg); 
         }
     }
 
-    function showView(el) { [vLoad,vStep1,vFinal].forEach(x=>x.style.display='none'); el.style.display='block'; }
+    function showView(name) {
+        Object.values(views).forEach(v => v.classList.remove('active'));
+        views[name].classList.add('active');
+    }
+
     function showSuccess(expiry, deviceId, isRevisit=false) {
-        showView(vFinal); document.body.classList.add('state-success');
-        finalIcon.innerHTML = '<i class="fas fa-check-circle"></i>';
-        finalTitle.innerText = isRevisit ? "Already Verified" : "Verification Success";
-        finalDesc.innerText = "You can return to the app now.";
-        document.getElementById('timerArea').style.display = 'block';
-        document.getElementById('finalBtn').style.display = 'block';
-        document.getElementById('retryBtn').style.display = 'none';
-        document.getElementById('didDisplay').innerText = "ID: " + deviceId;
-        document.getElementById('didDisplay').style.display = 'inline-block';
+        showView('final');
+        els.icon.className = "icon-wrapper status-success";
+        els.icon.innerHTML = '<i class="fas fa-check"></i>';
+        els.title.innerText = isRevisit ? "Welcome Back" : "Access Granted";
+        els.desc.innerText = "Your device has been successfully verified.";
+        
+        els.timerArea.style.display = 'block';
+        els.didDisp.style.display = 'inline-block';
+        els.didDisp.innerText = "ID: " + deviceId;
+        
+        els.btnFinal.style.display = 'block';
+        els.btnRetry.style.display = 'none';
+
         setInterval(() => {
             const diff = expiry - Date.now();
-            if(diff<=0) return document.getElementById('timerDisplay').innerText = "00:00:00";
+            if(diff<=0) return els.timerDisp.innerText = "00:00:00";
             const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000);
-            document.getElementById('timerDisplay').innerText = `${h}:${m<10?'0'+m:m}:${s<10?'0'+s:s}`;
+            els.timerDisp.innerText = `${h}:${m<10?'0'+m:m}:${s<10?'0'+s:s}`;
         }, 1000);
     }
+
     function showError(t, m) {
-        showView(vFinal); document.body.classList.add('state-error');
-        finalIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
-        finalTitle.innerText = t; finalDesc.innerText = m;
-        document.getElementById('timerArea').style.display = 'none';
-        document.getElementById('didDisplay').style.display = 'none';
-        document.getElementById('finalBtn').style.display = 'none';
-        document.getElementById('retryBtn').style.display = 'block';
+        showView('final');
+        els.icon.className = "icon-wrapper status-error";
+        els.icon.innerHTML = '<i class="fas fa-xmark"></i>';
+        els.title.innerText = t;
+        els.desc.innerText = m;
+        
+        els.timerArea.style.display = 'none';
+        els.didDisp.style.display = 'none';
+        els.btnFinal.style.display = 'none';
+        els.btnRetry.style.display = 'block';
     }
+
     window.onload = init;
 </script>
 </body>
