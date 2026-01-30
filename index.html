@@ -1,0 +1,222 @@
+<!DOCTYPE html><html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width,initial-scale=1" />
+  <title>Device Verification</title>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-app.js"></script>
+  <script src="https://www.gstatic.com/firebasejs/8.10.0/firebase-database.js"></script>
+  <style>
+    /* CSS Styles */
+    :root{ --page-bg:#eef3f6; --muted:#475569; --accent:#2f9e44; --danger:#e11d48; --mono: ui-monospace, monospace; }
+    *{box-sizing:border-box;margin:0;padding:0;font-family:Inter,system-ui,-apple-system,sans-serif}
+    body{min-height:100vh;background:linear-gradient(180deg,var(--page-bg),#fbfdff);display:flex;align-items:center;justify-content:center;padding:18px;color:#0f172a}
+    .page{width:100%;max-width:420px;background:#fff;border-radius:28px;padding:30px;box-shadow: 0 24px 48px rgba(2,6,23,0.08);}
+    .icon-wrap{width:78px;height:78px;border-radius:14px;background:#f0fdf4;display:flex;align-items:center;justify-content:center;margin:0 auto 18px;font-size:40px}
+    h1{font-size:22px;text-align:center;margin-bottom:8px}
+    .subtitle{font-size:13px;color:var(--muted);text-align:center;margin-bottom:18px}
+    .message{background:#f8fafc;border-radius:14px;padding:14px;display:flex;gap:12px;align-items:center;margin-bottom:18px}
+    .message .tickbox{width:44px;height:44px;border-radius:10px;background:#e2e8f0;display:flex;align-items:center;justify-content:center;font-size:20px}
+    .info-area{background:#f1f5f9;padding:12px;border-radius:14px;}
+    .info-row{display:flex;justify-content:space-between;padding:8px}
+    .info-row .label{font-size:13px;color:var(--muted);font-weight:700}
+    .info-row .val{font-size:13px;font-family:var(--mono);font-weight:700}
+    .progress-area{margin-top:16px;background:#f1f5f9;padding:12px;border-radius:12px}
+    .progress{height:8px;background:#e2e8f0;border-radius:99px;margin-top:8px;overflow:hidden}
+    .progress-bar{height:100%;width:0%;background:#22c55e;transition:width linear}
+    .btn-close{width:100%;padding:14px;margin-top:18px;border-radius:14px;border:none;background:#fff;box-shadow:0 4px 12px rgba(0,0,0,0.05);color:#ef4444;font-weight:700;cursor:pointer}
+    .copied::after{content:'Copied';position:absolute;background:#000;color:#fff;padding:2px 6px;border-radius:4px;font-size:10px;top:-20px;right:0}
+  </style>
+</head>
+<body>
+  <div class="page">
+    <div id="topIcon" class="icon-wrap">⏳</div>
+    <h1 id="title">Verification Status</h1>
+    <div id="subtitle" class="subtitle">Checking verification code...</div>
+    
+    <div class="message">
+      <div id="msgIcon" class="tickbox">⏳</div>
+      <div id="msgText" class="msg">Checking verification...</div>
+    </div>
+
+    <div class="info-area">
+      <div class="info-row"><div class="label">Device ID:</div><div id="deviceId" class="val">Checking...</div></div>
+      <div class="info-row"><div class="label">User ID:</div><div id="userId" class="val">—</div></div>
+    </div>
+
+    <div class="progress-area">
+      <div style="text-align:center;font-size:12px;color:#64748b">Auto-close in <strong id="countdown">5</strong>s</div>
+      <div class="progress"><div id="progressBar" class="progress-bar"></div></div>
+    </div>
+
+    <button id="closeBtn" class="btn-close">Close Window</button>
+  </div>
+
+<script>
+    // --- NEW FIREBASE CONFIGURATION ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
+      authDomain: "hankarpin.firebaseapp.com",
+      databaseURL: "https://hankarpin-default-rtdb.firebaseio.com",
+      projectId: "hankarpin",
+      storageBucket: "hankarpin.firebasestorage.app",
+      messagingSenderId: "201875395548",
+      appId: "1:201875395548:web:00708191e109c2ba5bf519"
+    };
+
+    if (!window.firebase) throw new Error('Firebase SDK not loaded');
+    if (!firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const database = firebase.database();
+
+    // UI Helpers
+    const els = {
+        top: document.getElementById('topIcon'),
+        msgIcon: document.getElementById('msgIcon'),
+        msg: document.getElementById('msgText'),
+        title: document.getElementById('title'),
+        sub: document.getElementById('subtitle'),
+        dev: document.getElementById('deviceId'),
+        uid: document.getElementById('userId'),
+        prog: document.getElementById('progressBar'),
+        count: document.getElementById('countdown')
+    };
+
+    function setText(el, t){ if(el) el.textContent = t || '—'; }
+    function setIcons(s){
+        const i = s==='loading'?'⏳':(s==='success'?'✔':(s==='used'?'🚫':'❌'));
+        setText(els.top, i); setText(els.msgIcon, i);
+        els.top.style.background = s==='success'?'#f0fdf4':(s==='loading'?'#f1f5f9':'#fef2f2');
+        els.top.style.color = s==='success'?'#16a34a':(s==='loading'?'#64748b':'#dc2626');
+    }
+    
+    function setError(msg){ 
+        setIcons('error'); 
+        setText(els.title, 'Verification Failed'); 
+        setText(els.sub, msg); 
+        setText(els.msg, msg); 
+    }
+    
+    function setSuccess(){
+        setIcons('success');
+        setText(els.title, 'Verification Successful!');
+        setText(els.sub, 'Access granted.');
+        setText(els.msg, 'You can return to the App.');
+    }
+
+    function setAlreadyVerified(expiryTime){
+        setIcons('success');
+        setText(els.title, 'Already Verified');
+        let txt = 'Device remembered.';
+        if(expiryTime){
+             const min = Math.floor((expiryTime - Date.now())/60000);
+             if(min > 0) txt = `Valid for ${min} mins.`;
+        }
+        setText(els.sub, txt);
+        setText(els.msg, 'Verification Active.');
+    }
+
+    // Countdown Logic
+    let interval;
+    function startCountdown(sec){
+        if(interval) clearInterval(interval);
+        els.prog.style.transition='none'; els.prog.style.width='0%';
+        setTimeout(()=>{ els.prog.style.transition=`width ${sec}s linear`; els.prog.style.width='100%'; },50);
+        let c = sec; setText(els.count, c);
+        interval = setInterval(()=>{ c--; setText(els.count, c); if(c<=0){ clearInterval(interval); window.open('','_self').close(); } },1000);
+    }
+    document.getElementById('closeBtn').addEventListener('click', ()=> window.open('','_self').close());
+
+    // --- MAIN LOGIC ---
+    async function verify(){
+        
+        // 1. CHECK LOCAL STORAGE (Previous Verification)
+        const saved = localStorage.getItem('my_app_verification');
+        if(saved){
+            const parsed = JSON.parse(saved);
+            const now = Date.now();
+            
+            // Check Expiry (Agar saved time expire ho gaya hai)
+            if(parsed.expiresAt && now > parsed.expiresAt){
+                // Expired: Clear Data & Show Error
+                localStorage.removeItem('my_app_verification');
+                setError('Code Expired'); // Direct Error Screen
+                return;
+            }
+            
+            // Valid: Show Success
+            setText(els.dev, parsed.deviceId);
+            setText(els.uid, parsed.token);
+            setAlreadyVerified(parsed.expiresAt);
+            return;
+        }
+
+        // 2. READ URL PARAMS (Hash or Search)
+        let qs = window.location.search;
+        if(!qs && window.location.hash){
+            qs = window.location.hash.substring(1);
+            if(qs.indexOf('?')!==-1) qs = qs.split('?')[1];
+        }
+        const p = new URLSearchParams(qs);
+        const did = p.get('device');
+        const code = p.get('code');
+        const uid = p.get('uid');
+
+        // 3. CLEAN URL
+        if(window.history.replaceState) window.history.replaceState({}, document.title, window.location.pathname);
+
+        // 4. VERIFY FRESH LINK
+        if(!did || !code || !uid){ 
+            setError('Invalid Link'); // No params & no local storage = Invalid
+            return; 
+        }
+
+        try{
+            setIcons('loading');
+            // Note: Make sure your new Firebase Database has "users" node
+            const ref = database.ref(`users/${uid}/verification_codes/${code}`);
+            const snap = await ref.once('value');
+            const data = snap.val();
+
+            if(!data){ setError('Invalid Code'); return; }
+            if(data.used){ 
+                setIcons('used'); 
+                setText(els.title, 'Security Alert'); 
+                setText(els.sub, 'Code already used.'); 
+                setText(els.msg, 'Code Used'); 
+                return; 
+            }
+            if(data.deviceId !== did){ setError('Device Mismatch'); return; }
+            
+            const now = Date.now();
+            if(data.expires_at && now > data.expires_at){ setError('Code Expired'); return; }
+
+            // Success Update
+            await ref.update({ used: true, used_at: now });
+            await database.ref(`users/${uid}/devices/${did}`).set({ verification_time: now, last_code: code });
+
+            const token = data.access_token || Math.random().toString(36).slice(2);
+            
+            // Save to Storage (with Expiry from Firebase)
+            const expiry = data.expires_at || (now + 86400000); // Fallback 24h
+            localStorage.setItem('my_app_verification', JSON.stringify({
+                deviceId: did,
+                token: token,
+                expiresAt: expiry,
+                timestamp: now
+            }));
+
+            // UI Update
+            setText(els.dev, did);
+            setText(els.uid, token);
+            setSuccess();
+            startCountdown(5);
+
+        }catch(e){
+            console.error(e);
+            setError('Database Error');
+        }
+    }
+
+    window.addEventListener('load', verify);
+</script>
+</body>
+</html>
