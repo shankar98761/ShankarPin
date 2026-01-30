@@ -24,6 +24,7 @@
         .state-error .icon-box { background:#fef2f2; color:#dc2626; }
         .timer-box { background:#f8fafc; padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid #e2e8f0; display:none; }
         .t-val { font-size:24px; font-weight:800; font-variant-numeric:tabular-nums; }
+        .device-id-display { font-size: 11px; color: #64748b; margin-top: 10px; font-family: monospace; background: #f1f5f9; padding: 5px 10px; border-radius: 6px; display: inline-block; }
     </style>
 </head>
 <body>
@@ -47,8 +48,11 @@
             <div class="t-val" id="timerDisplay">00:00:00</div>
         </div>
 
-        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Close Window</button>
-        <button class="btn" id="retryBtn" onclick="retryProcess()" style="display:none; background:#dc2626; margin-top:10px;">Retry Verification</button>
+        <div id="didDisplay" class="device-id-display" style="display:none;">ID: ...</div>
+
+        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none; margin-top:20px;">Close Window</button>
+        
+        <button class="btn" id="retryBtn" onclick="retryProcess()" style="display:none; background:#dc2626; margin-top:20px;">Retry Verification</button>
     </div>
 
 <script>
@@ -66,10 +70,9 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // --- SECURITY SETTINGS ---
-    const MIN_SECONDS_REQUIRED = 30; // 30 Seconds ka Time Trap
+    // --- SECURITY SETTING: 30 SECONDS ---
+    const MIN_SECONDS_REQUIRED = 30; 
     
-    // Elements
     const vLoad=document.getElementById('viewLoad'), vStep1=document.getElementById('viewStep1'), vFinal=document.getElementById('viewFinal');
     const finalTitle=document.getElementById('finalTitle'), finalDesc=document.getElementById('finalDesc'), finalIcon=document.getElementById('finalIcon');
     let shortenerUrl = "";
@@ -88,7 +91,7 @@
         const localSaved = localStorage.getItem('my_app_verification');
         if(localSaved) {
             const ld = JSON.parse(localSaved);
-            if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; }
+            if(Date.now() < ld.expiry) { showSuccess(ld.expiry, ld.did, true); return; }
         }
 
         // 2. APP ENTRY (Step 1 - Data Save)
@@ -96,18 +99,15 @@
             cachedUid = uid;
             localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
             try {
-                // Config load karo taaki shortenerUrl set ho jaye
                 const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
                 if(conf && conf.shortener_api) {
                     shortenerUrl = conf.shortener_api;
                     showView(vStep1);
                 } else {
-                    // Agar shortener nahi hai, to direct verify (fallback)
                     verifyUser(did, code, uid); 
                 }
             } catch(e) { 
                 alert("Loading Error. Please check internet.");
-                // Agar load fail hua, tab bhi Step 1 dikhao taaki user 'Verify Now' dabakar reload kar sake
                 showView(vStep1);
             }
             return;
@@ -138,8 +138,11 @@
             if(isSecretParam) {
                 // Time Check (30 Seconds Rule)
                 if(timeTaken < MIN_SECONDS_REQUIRED) {
+                     // UPDATED ERROR MESSAGE
                      showError("Verification Failed", "Please Complete the shortner process first!");
                      document.getElementById('retryBtn').style.display = 'block';
+                     
+                     // Reset start time so they have to start over
                      await codeRef.update({ started_at: null });
                      return;
                 }
@@ -160,9 +163,8 @@
     }
 
     async function goToShortener() {
-        // --- NEW LOGIC: AGAR LINK NAHI HAI TO RELOAD KARO ---
+        // Agar shortener link load nahi hua hai to page reload karo (Retry logic)
         if(!shortenerUrl) {
-            // Ye line page ko reload karegi (Process Start se shuru hoga)
             window.location.reload();
             return;
         }
@@ -187,7 +189,10 @@
     }
 
     function retryProcess() {
-        // Retry dabane par bhi reload hoga aur wapis Step 1 dikhega
+        // Retry dabane par URL se '?v=1' hata kar reload karo
+        // Isse wapis STEP 1 (Verify Now button) dikhega
+        let cleanUrl = window.location.href.split('?')[0];
+        window.history.replaceState({}, document.title, cleanUrl);
         window.location.reload();
     }
 
@@ -213,22 +218,30 @@
             localStorage.removeItem('pending_verif');
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
-            showSuccess(expiry);
+            showSuccess(expiry, did);
 
         } catch(e) { showError("Verification Failed", e); }
     }
 
     function showView(el) { [vLoad,vStep1,vFinal].forEach(x=>x.style.display='none'); el.style.display='block'; }
 
-    function showSuccess(expiry, isRevisit=false) {
+    function showSuccess(expiry, deviceId, isRevisit=false) {
         showView(vFinal);
         document.body.classList.add('state-success');
         finalIcon.innerHTML = '<i class="fas fa-check-circle"></i>';
         finalTitle.innerText = isRevisit ? "Already Verified" : "Verification Success";
         finalDesc.innerText = "You can return to the app now.";
+        
+        // Timer & UI Logic
         document.getElementById('timerArea').style.display = 'block';
         document.getElementById('finalBtn').style.display = 'block';
         document.getElementById('retryBtn').style.display = 'none';
+        
+        // Show Device ID
+        const didEl = document.getElementById('didDisplay');
+        didEl.innerText = "ID: " + deviceId;
+        didEl.style.display = 'inline-block';
+
         startTimer(expiry);
     }
 
@@ -237,7 +250,12 @@
         document.body.classList.add('state-error');
         finalIcon.innerHTML = '<i class="fas fa-times-circle"></i>';
         finalTitle.innerText = t; finalDesc.innerText = m;
-        document.getElementById('retryBtn').style.display = 'none';
+        
+        // Error ke time timer aur device id chhupa do
+        document.getElementById('timerArea').style.display = 'none';
+        document.getElementById('didDisplay').style.display = 'none';
+        document.getElementById('retryBtn').style.display = 'block';
+        document.getElementById('finalBtn').style.display = 'none';
     }
 
     function startTimer(exp) {
