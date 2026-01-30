@@ -48,7 +48,6 @@
         </div>
 
         <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Close Window</button>
-        
         <button class="btn" id="retryBtn" onclick="retryProcess()" style="display:none; background:#dc2626; margin-top:10px;">Retry Verification</button>
     </div>
 
@@ -65,11 +64,12 @@
     };
 
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const db = firebase.database();
+    const database = firebase.database();
 
-    // --- SECURITY SETTING: UPDATED TO 30 SECONDS ---
-    const MIN_SECONDS_REQUIRED = 30; 
+    // --- SECURITY SETTINGS ---
+    const MIN_SECONDS_REQUIRED = 30; // 30 Seconds ka Time Trap
     
+    // Elements
     const vLoad=document.getElementById('viewLoad'), vStep1=document.getElementById('viewStep1'), vFinal=document.getElementById('viewFinal');
     const finalTitle=document.getElementById('finalTitle'), finalDesc=document.getElementById('finalDesc'), finalIcon=document.getElementById('finalIcon');
     let shortenerUrl = "";
@@ -96,14 +96,20 @@
             cachedUid = uid;
             localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
             try {
+                // Config load karo taaki shortenerUrl set ho jaye
                 const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
                 if(conf && conf.shortener_api) {
                     shortenerUrl = conf.shortener_api;
                     showView(vStep1);
                 } else {
+                    // Agar shortener nahi hai, to direct verify (fallback)
                     verifyUser(did, code, uid); 
                 }
-            } catch(e) { alert("Network Error"); }
+            } catch(e) { 
+                alert("Loading Error. Please check internet.");
+                // Agar load fail hua, tab bhi Step 1 dikhao taaki user 'Verify Now' dabakar reload kar sake
+                showView(vStep1);
+            }
             return;
         }
 
@@ -132,19 +138,15 @@
             if(isSecretParam) {
                 // Time Check (30 Seconds Rule)
                 if(timeTaken < MIN_SECONDS_REQUIRED) {
-                     // UPDATED ERROR MESSAGE
                      showError("Verification Failed", "Please Complete the shortner process first!");
                      document.getElementById('retryBtn').style.display = 'block';
-                     
-                     // Reset start time so they have to start over
                      await codeRef.update({ started_at: null });
                      return;
                 }
-                
                 // Verify
                 verifyUser(data.did, data.code, data.uid);
             } else {
-                // Secret Missing (Back button) -> Show Button Again
+                // Secret Missing (Back button) -> Retry Config Load
                 try {
                      const conf = (await db.ref(`users/${data.uid}/config`).once('value')).val();
                      if(conf) shortenerUrl = conf.shortener_api;
@@ -158,32 +160,34 @@
     }
 
     async function goToShortener() {
-        if(shortenerUrl) {
-            document.getElementById('btnVerifyLink').innerText = "Processing...";
-            document.getElementById('btnVerifyLink').disabled = true;
+        // --- NEW LOGIC: AGAR LINK NAHI HAI TO RELOAD KARO ---
+        if(!shortenerUrl) {
+            // Ye line page ko reload karegi (Process Start se shuru hoga)
+            window.location.reload();
+            return;
+        }
 
-            const pending = localStorage.getItem('pending_verif');
-            if(pending) {
-                const data = JSON.parse(pending);
-                try {
-                    // Set Server Timestamp
-                    await db.ref(`users/${data.uid}/verification_codes/${data.code}`).update({
-                        started_at: firebase.database.ServerValue.TIMESTAMP
-                    });
-                    window.location.href = shortenerUrl;
-                } catch(e) {
-                    alert("Connection Error. Please try again.");
-                    document.getElementById('btnVerifyLink').disabled = false;
-                }
+        document.getElementById('btnVerifyLink').innerText = "Processing...";
+        document.getElementById('btnVerifyLink').disabled = true;
+
+        const pending = localStorage.getItem('pending_verif');
+        if(pending) {
+            const data = JSON.parse(pending);
+            try {
+                // Set Server Timestamp
+                await db.ref(`users/${data.uid}/verification_codes/${data.code}`).update({
+                    started_at: firebase.database.ServerValue.TIMESTAMP
+                });
+                window.location.href = shortenerUrl;
+            } catch(e) {
+                alert("Connection Error. Please try again.");
+                document.getElementById('btnVerifyLink').disabled = false;
             }
         }
     }
 
     function retryProcess() {
-        // --- RETRY LOGIC: RELOAD TO SHOW START LINK ---
-        // Humne 'started_at' null kar diya hai, so page reload karne par
-        // code wapis Step 3 me aayega -> time check fail hoga ya start_at null milega ->
-        // aur wo automatically Step 1 (Button View) dikha dega.
+        // Retry dabane par bhi reload hoga aur wapis Step 1 dikhega
         window.location.reload();
     }
 
@@ -210,9 +214,6 @@
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
-            
-            // --- AUTO CLOSE REMOVED ---
-            // Ab user khud close karega
 
         } catch(e) { showError("Verification Failed", e); }
     }
