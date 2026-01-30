@@ -19,7 +19,6 @@
         .btn { width:100%; padding:14px; border-radius:14px; border:none; font-weight:700; background:var(--primary); color:#fff; cursor:pointer; font-size:15px; }
         .loader { width:24px; height:24px; border:3px solid #e2e8f0; border-top-color:var(--primary); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto; }
         @keyframes spin { to { transform:rotate(360deg); } } @keyframes fadeIn { from { opacity:0; transform:translateY(10px); } to { opacity:1; transform:translateY(0); } }
-        /* Success/Error States */
         .state-success .icon-box { background:#dcfce7; color:#16a34a; }
         .state-error .icon-box { background:#fef2f2; color:#dc2626; }
         .timer-box { background:#f8fafc; padding:15px; border-radius:12px; margin-bottom:20px; border:1px solid #e2e8f0; display:none; }
@@ -28,13 +27,13 @@
 </head>
 <body>
 
-    <div id="viewLoad" class="card active"><div class="loader"></div><p style="margin-top:15px">Processing...</p></div>
+    <div id="viewLoad" class="card active"><div class="loader"></div><p style="margin-top:15px">Checking...</p></div>
 
     <div id="viewStep1" class="card">
         <div class="icon-box"><i class="fas fa-shield-alt"></i></div>
-        <h1>Security Check</h1>
-        <p>Click the button below to complete the verification process securely.</p>
-        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">VERIFY NOW</button>
+        <h1>Almost There!</h1>
+        <p>Click below to complete the security check via our partner.</p>
+        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">CONTINUE VERIFICATION</button>
     </div>
 
     <div id="viewFinal" class="card">
@@ -49,6 +48,7 @@
     </div>
 
 <script>
+    // --- FIREBASE CONFIG (UPDATE IF NEEDED) ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -58,6 +58,7 @@
       messagingSenderId: "201875395548",
       appId: "1:201875395548:web:00708191e109c2ba5bf519"
     };
+
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
@@ -68,40 +69,45 @@
     let shortenerUrl = "";
 
     async function init() {
-        // 1. URL se Params nikalo
+        // 1. URL se Params nikalo (Supports # and ?)
         let qs = window.location.hash.substring(1) || window.location.search;
         if(qs.indexOf('?')!==-1) qs = qs.split('?')[1];
+        if(qs.indexOf('#')!==-1) qs = qs.split('#')[1];
+        
         const p = new URLSearchParams(qs);
         const did = p.get('device'), code = p.get('code'), uid = p.get('uid');
 
-        // 2. Agar Params mile (Matlab App se aaya hai)
+        // 2. SCENARIO A: App se Direct Aaya hai (Params mile)
         if(did && code && uid) {
-            // Data Browser me save karo
-            sessionStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
+            // Data Browser me PERMANENTLY save karo (localStorage)
+            localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
             
             // Firebase se Shortener Link nikalo
             try {
                 const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
-                // Hum 'shortener_api' field ko hi 'Short Link' ki tarah use karenge
                 if(conf && conf.shortener_api) {
                     shortenerUrl = conf.shortener_api;
                     showView(vStep1); // Button dikhao
                 } else {
-                    alert("Admin Config Error: Shortener Link not set in 'Shortener API' field.");
+                    // Fallback: Agar shortener set nahi hai, direct verify karo
+                    verifyUser(did, code, uid);
                 }
             } catch(e) { alert("Connection Error"); }
             return;
         }
 
-        // 3. Agar Params nahi mile (Matlab Shortener se wapis aaya hai)
-        const saved = sessionStorage.getItem('pending_verif');
+        // 3. SCENARIO B: Shortener se wapis aaya hai (Params gayab hain)
+        const saved = localStorage.getItem('pending_verif');
         if(saved) {
+            // Saved data nikalo
             const data = JSON.parse(saved);
+            
+            // Verification start karo
             verifyUser(data.did, data.code, data.uid);
             return;
         }
 
-        // 4. Already Verified Check (LocalStorage)
+        // 4. SCENARIO C: Pehle se verified hai
         const localSaved = localStorage.getItem('my_app_verification');
         if(localSaved) {
             const ld = JSON.parse(localSaved);
@@ -111,7 +117,7 @@
             }
         }
 
-        showError("Invalid Link", "Missing parameters. Please open from App.");
+        showError("Invalid Link", "Data not found. Please open link from App again.");
     }
 
     function goToShortener() {
@@ -124,6 +130,7 @@
             const ref = db.ref(`users/${uid}/verification_codes/${code}`);
             const data = (await ref.once('value')).val();
 
+            // Code valid hai?
             if(!data) throw "Invalid Code";
             if(data.used) throw "Code Already Used";
             if(data.expires_at && Date.now() > data.expires_at) throw "Code Expired";
@@ -140,13 +147,13 @@
             // Update Device
             await db.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
-            // Clear Pending, Save Permanent
-            sessionStorage.removeItem('pending_verif');
+            // SUCCESS! Pending delete karo, Verified save karo
+            localStorage.removeItem('pending_verif');
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
             
-            // Auto Close logic (Optional)
+            // 5 second me auto close
             setTimeout(()=>window.close(), 5000);
 
         } catch(e) { showError("Verification Failed", e); }
