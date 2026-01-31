@@ -45,7 +45,9 @@
             <div style="font-size:10px; color:#888;">ACCESS GRANTED FOR</div>
             <div id="timerDisplay" style="font-size:28px; font-weight:700; color:var(--neon-green); font-family:monospace; margin-top:5px;">00:00:00</div>
         </div>
-        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Return to App</button>
+        
+        <button class="btn" id="finalBtn" style="display:none; background: linear-gradient(135deg, #00C853, #64DD17);" onclick="openApp()">OPEN APP 🚀</button>
+        <button class="btn btn-retry" id="retryBtn" onclick="window.close()" style="display:none">CLOSE</button>
     </div>
 
 <script>
@@ -75,7 +77,12 @@
         return new URLSearchParams(window.location.search).get(name);
     }
 
+    function openApp() {
+        window.location.href = "rlxpin://verify";
+    }
+
     async function init() {
+        // 1. Check LocalStorage
         const local = localStorage.getItem('my_app_verification');
         if(local) {
             try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
@@ -92,21 +99,21 @@
                 const snap = await codeRef.once('value');
                 const codeData = snap.val();
 
-                // 1. DATA NOT FOUND (Time Trap Active - App hasn't uploaded yet)
+                // 1. DATA NOT FOUND (Time Trap Active / Fake Link)
                 if(!codeData) {
-                    showError("Invalid Verification", "Session data not found. You might be too fast.");
+                    showError("Invalid Verification", "Session data not found. Please verify from the App.");
                     return;
                 }
 
                 // 2. TOKEN MISMATCH
                 if(codeData.secret_token !== token) {
-                    showError("Invalid Verification", "Token mismatch.");
+                    showError("Invalid Verification", "Security token mismatch.");
                     return;
                 }
 
                 // 3. EXPIRED
                 if(codeData.used) {
-                    showError("Expired", "Link already used.");
+                    showError("Link Expired", "This verification link has already been used.");
                     return;
                 }
 
@@ -126,7 +133,7 @@
         icon.className = "icon-wrapper status-loading";
         icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
         document.getElementById('finalTitle').innerText = "Verifying...";
-        document.getElementById('finalDesc').innerText = "Finalizing...";
+        document.getElementById('finalDesc').innerText = "Finalizing security check...";
 
         try {
             const ref = database.ref(`users/${uid}/verification_codes/${code}`);
@@ -154,9 +161,12 @@
         icon.className = "icon-wrapper status-success";
         icon.innerHTML = '<i class="fas fa-check"></i>';
         document.getElementById('finalTitle').innerText = "Access Granted";
-        document.getElementById('finalDesc').innerText = "Device verified successfully.";
+        document.getElementById('finalDesc').innerText = "Verification Complete.";
         document.getElementById('timerArea').style.display = 'block';
+        
+        // Show OPEN APP Button
         document.getElementById('finalBtn').style.display = 'block';
+        document.getElementById('retryBtn').style.display = 'none';
         
         setInterval(() => {
             const diff = expiry - Date.now();
