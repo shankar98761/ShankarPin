@@ -11,21 +11,38 @@
 
     <style>
         :root { --bg:#09090b; --card:#121217; --neon:#3b82f6; --success:#10b981; --error:#ef4444; }
-        body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
+        body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; user-select: none; }
+        
         .card { background:rgba(20,20,25,0.6); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.08); width:100%; max-width:360px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:popIn 0.5s ease; box-shadow:0 20px 50px rgba(0,0,0,0.5); }
         .card.active { display:block; }
         @keyframes popIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+        
         .icon-box { width:70px; height:70px; margin:0 auto 20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); }
         .success { color:var(--success); border-color:rgba(16,185,129,0.3); }
         .error { color:var(--error); border-color:rgba(239,68,68,0.3); }
+        
         h1 { font-size:20px; margin:10px 0; font-weight:600; }
         p { color:#888; font-size:14px; line-height:1.5; margin-bottom:25px; }
+        
         .btn { width:100%; padding:15px; border-radius:12px; border:none; font-weight:600; font-size:14px; cursor:pointer; transition:0.2s; text-transform:uppercase; letter-spacing:1px; }
         .btn-green { background:linear-gradient(135deg, #10b981, #059669); color:white; box-shadow:0 10px 20px -5px rgba(16,185,129,0.4); }
         .btn-red { background:rgba(255,255,255,0.05); color:#ef4444; border:1px solid rgba(239,68,68,0.3); }
-        .timer-display { background:rgba(0,0,0,0.3); padding:10px; border-radius:10px; margin-bottom:20px; font-family:monospace; font-size:22px; color:var(--success); border:1px solid rgba(16,185,129,0.2); }
+        
+        .timer-display { background:rgba(0,0,0,0.3); padding:10px; border-radius:10px; margin-bottom:10px; font-family:monospace; font-size:22px; color:var(--success); border:1px solid rgba(16,185,129,0.2); }
+        
+        /* Device ID Style */
+        .did-box { font-size: 11px; color: #555; margin-bottom: 20px; padding: 5px; border-radius: 6px; cursor: pointer; transition: 0.3s; }
+        .did-box:active { color: #fff; background: rgba(255,255,255,0.1); }
+        .did-label { font-size: 9px; color: #444; letter-spacing: 1px; display: block; margin-bottom: 2px;}
+
         .spinner { width:35px; height:35px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
         @keyframes spin { 100% { transform:rotate(360deg); } }
+        
+        /* Toast Notification */
+        #toast { visibility: hidden; min-width: 150px; background-color: #333; color: #fff; text-align: center; border-radius: 50px; padding: 10px; position: fixed; z-index: 1; bottom: 30px; left: 50%; transform: translateX(-50%); font-size: 12px; box-shadow: 0 5px 15px rgba(0,0,0,0.5); }
+        #toast.show { visibility: visible; animation: fadein 0.5s, fadeout 0.5s 2.5s; }
+        @keyframes fadein { from {bottom: 0; opacity: 0;} to {bottom: 30px; opacity: 1;} }
+        @keyframes fadeout { from {bottom: 30px; opacity: 1;} to {bottom: 0; opacity: 0;} }
     </style>
 </head>
 <body>
@@ -34,18 +51,27 @@
 
     <div id="vError" class="card">
         <div class="icon-box error"><i class="fas fa-shield-halved"></i></div>
-        <h1 id="eTitle">Access Denied</h1>
-        <p id="eDesc">Complete verification properly from App!</p>
+        <h1 id="eTitle">Direct Access Denied</h1>
+        <p id="eDesc">Please verify using the App only.</p>
         <button class="btn btn-red" onclick="window.close()">CLOSE</button>
     </div>
 
     <div id="vFinal" class="card">
         <div class="icon-box success"><i class="fas fa-check"></i></div>
         <h1>Verification Success</h1>
-        <p>Your device has been verified successfully.</p>
+        <p style="margin-bottom: 15px;">Access granted successfully.</p>
+        
         <div class="timer-display" id="timer">00:00:00</div>
+        
+        <div class="did-box" id="didArea" ondblclick="copyToClipboard()">
+            <span class="did-label">DEVICE ID (DOUBLE TAP TO COPY)</span>
+            <span id="didText">LOADING...</span>
+        </div>
+
         <button class="btn btn-green" onclick="openApp()">OPEN APP NOW 🚀</button>
     </div>
+
+    <div id="toast">Copied to Clipboard!</div>
 
 <script>
     // --- FIREBASE CONFIG (Paste Yours) ---
@@ -62,36 +88,43 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const db = firebase.database();
 
+    // --- SETTING: 10 MINUTES EXPIRY ---
+    const TOKEN_VALIDITY_MINUTES = 10; 
+
     const views = { load:document.getElementById('vLoad'), err:document.getElementById('vError'), final:document.getElementById('vFinal') };
     
     function openApp() { window.location.href = "rlxpin://verify"; }
+    function getParam(n) { return new URLSearchParams(window.location.search).get(n); }
 
-    // Helper to get params BEFORE cleaning URL
-    function getParam(name) {
-        return new URLSearchParams(window.location.search).get(name);
+    // --- GENERIC ERROR FUNCTION (Stealth Mode) ---
+    // Sabhi errors ke liye same message
+    function triggerGenericError() {
+        showView('err');
+        document.getElementById('eTitle').innerText = "Direct Access Denied";
+        document.getElementById('eDesc').innerText = "Please verify using the App only.";
     }
 
     async function init() {
         const local = localStorage.getItem('my_app_verification');
         if(local) {
-            try { const d = JSON.parse(local); if(Date.now() < d.expiry) { showSuccess(d.expiry); return; } } catch(e){}
+            try { 
+                const d = JSON.parse(local); 
+                if(Date.now() < d.expiry) { 
+                    showSuccess(d.expiry, d.did); // Pass DID
+                    return; 
+                } 
+            } catch(e){}
         }
 
-        // --- STEP 1: READ PARAMS (Before cleaning URL) ---
         const accessKey = getParam('access');
-        
-        // --- STEP 2: CHECK ACCESS KEY (From Shortener) ---
         if(accessKey !== 'granted') {
-            showError("Direct Access Denied", "Please verify using the App only.");
+            triggerGenericError();
             return;
         }
 
-        // --- STEP 3: CHECK BRIDGE DATA (From start.html) ---
-        // Note: Using localStorage as it is more reliable for redirects
         const bridge = localStorage.getItem('secure_bridge_data');
-        
         if(!bridge) {
-            showError("Session Missing", "Complete verification properly from App!");
+            triggerGenericError();
             return;
         }
 
@@ -101,29 +134,35 @@
             const snap = await db.ref(`users/${data.uid}/verification_codes/${data.code}`).once('value');
             const server = snap.val();
 
-            // Check 1: Time Trap (Data exists on Firebase?)
-            if(!server) {
-                showError("Invalid Verification", "Complete verification properly from App!"); 
-                return;
+            if(!server) { triggerGenericError(); return; } // Time Trap Fail
+            if(server.secret_token !== data.token) { 
+                localStorage.removeItem('secure_bridge_data');
+                triggerGenericError(); return; 
+            } // Token Mismatch
+            
+            if(server.used) { triggerGenericError(); return; } // Expired/Used
+
+            // --- 10 MINUTE EXPIRY CHECK ---
+            if (server.started_at) {
+                const timeDiff = Date.now() - server.started_at;
+                const maxTime = TOKEN_VALIDITY_MINUTES * 60 * 1000;
+                
+                if (timeDiff > maxTime) {
+                    localStorage.removeItem('secure_bridge_data');
+                    triggerGenericError(); // Timeout ko bhi Generic Error dikhao
+                    return;
+                }
             }
 
-            // Check 2: Token Match
-            if(server.secret_token !== data.token) {
-                showError("Security Error", "Token mismatch detected.");
-                localStorage.removeItem('secure_bridge_data'); // Security wipe
-                return;
-            }
-
-            // Check 3: Used/Expired
-            if(server.used) {
-                showError("Link Expired", "This link is already used.");
-                return;
-            }
-
-            // All Good -> Verify
             await verifyDevice(data.did, data.code, data.uid);
 
-        } catch(e) { showError("Connection Error", "Please check your internet."); }
+        } catch(e) { 
+            // Internet Error ke liye thoda alag dikha sakte hain ya same, 
+            // user ki safety ke liye "Connection Error" better hai
+            showView('err');
+            document.getElementById('eTitle').innerText = "Connection Error";
+            document.getElementById('eDesc').innerText = "Check internet connection.";
+        }
     }
 
     async function verifyDevice(did, code, uid) {
@@ -136,22 +175,21 @@
 
             await db.ref(`users/${uid}/devices/${did}`).set({ verification_time: Date.now(), expiry_time: expiry, last_code: code });
 
-            // CLEANUP (Very Important for Security)
             localStorage.removeItem('secure_bridge_data');
-            
-            // Save Local Success
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
             
-            showSuccess(expiry);
-        } catch(e) { showError("Update Failed", "Could not verify device."); }
+            showSuccess(expiry, did);
+        } catch(e) { triggerGenericError(); }
     }
 
     function showView(name) { Object.values(views).forEach(v => v.classList.remove('active')); views[name].classList.add('active'); }
 
-    function showSuccess(exp) {
+    function showSuccess(exp, did) {
         showView('final');
         
-        // --- CLEAN URL NOW (Only after success) ---
+        // Show Device ID
+        document.getElementById('didText').innerText = did || "UNKNOWN";
+
         if(window.history.replaceState) {
             const clean = window.location.href.split('?')[0].split('#')[0];
             window.history.replaceState({}, document.title, clean);
@@ -165,10 +203,22 @@
         }, 1000);
     }
 
-    function showError(t, m) {
-        showView('err');
-        document.getElementById('eTitle').innerText = t;
-        document.getElementById('eDesc').innerText = m;
+    // Copy Function
+    function copyToClipboard() {
+        const text = document.getElementById('didText').innerText;
+        if(text === "LOADING..." || text === "UNKNOWN") return;
+        
+        const textArea = document.createElement("textarea");
+        textArea.value = text;
+        document.body.appendChild(textArea);
+        textArea.select();
+        document.execCommand("Copy");
+        document.body.removeChild(textArea);
+        
+        // Show Toast
+        const x = document.getElementById("toast");
+        x.className = "show";
+        setTimeout(function(){ x.className = x.className.replace("show", ""); }, 3000);
     }
 
     window.onload = init;
