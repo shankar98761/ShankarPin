@@ -15,12 +15,10 @@
         .card { background:var(--glass); backdrop-filter:blur(20px); border:1px solid var(--border); width:100%; max-width:380px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:floatUp 0.6s ease; }
         .card.active { display:block; }
         @keyframes floatUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        
         .icon-wrapper { width:80px; height:80px; margin:0 auto 25px; border-radius:50%; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; font-size:32px; border:1px solid var(--border); box-shadow:0 0 30px rgba(0,0,0,0.2); }
         .status-loading { color:var(--neon-blue); text-shadow:0 0 15px rgba(59,130,246,0.5); }
         .status-success { color:var(--neon-green); border-color:rgba(16,185,129,0.3); }
         .status-error { color:var(--neon-red); border-color:rgba(239,68,68,0.3); }
-        
         .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:20px; }
         .btn:disabled { background:#333; cursor:not-allowed; }
         .btn-retry { background:linear-gradient(135deg,#ef4444,#dc2626); }
@@ -35,7 +33,7 @@
     <div id="viewError" class="card">
         <div class="icon-wrapper status-error"><i class="fas fa-lock"></i></div>
         <h1 id="errTitle">Access Denied</h1>
-        <p id="errDesc">Please verify from the App.</p>
+        <p id="errDesc">Invalid Verification. Please verify properly from the App.</p>
         <button class="btn btn-retry" onclick="window.close()">CLOSE</button>
     </div>
 
@@ -51,7 +49,7 @@
     </div>
 
 <script>
-    // --- FIREBASE CONFIG ---
+    // --- FIREBASE CONFIG (Paste Yours) ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -65,19 +63,16 @@
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    const MIN_SECONDS = 45; // 45 Seconds Time Trap
-    
     const views = { load:document.getElementById('viewLoad'), error:document.getElementById('viewError'), final:document.getElementById('viewFinal') };
     
-    // Clean URL Immediately (Hidden Token Logic)
+    // Clean URL
     if(window.history.replaceState) {
         const clean = window.location.href.split('?')[0].split('#')[0];
         window.history.replaceState({}, document.title, clean);
     }
 
     function getParam(name) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(name);
+        return new URLSearchParams(window.location.search).get(name);
     }
 
     async function init() {
@@ -86,7 +81,6 @@
             try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
         }
 
-        // Get Params
         const token = getParam('token');
         const code = getParam('code');
         const uid = getParam('uid');
@@ -98,32 +92,25 @@
                 const snap = await codeRef.once('value');
                 const codeData = snap.val();
 
-                // 1. TOKEN MATCH
-                if(!codeData || codeData.secret_token !== token) {
-                    showError("Invalid Session", "Token mismatch. Restart from App.");
+                // 1. DATA NOT FOUND (Time Trap Active - App hasn't uploaded yet)
+                if(!codeData) {
+                    showError("Invalid Verification", "Session data not found. You might be too fast.");
                     return;
                 }
 
-                // 2. EXPIRED
+                // 2. TOKEN MISMATCH
+                if(codeData.secret_token !== token) {
+                    showError("Invalid Verification", "Token mismatch.");
+                    return;
+                }
+
+                // 3. EXPIRED
                 if(codeData.used) {
-                    showError("Expired", "This link has already been used.");
+                    showError("Expired", "Link already used.");
                     return;
                 }
 
-                // 3. TIME TRAP
-                if(!codeData.started_at) {
-                    showError("Error", "Session invalid.");
-                    return;
-                }
-                const timeTaken = (Date.now() - codeData.started_at) / 1000;
-                
-                if(timeTaken < MIN_SECONDS) {
-                    const wait = Math.ceil(MIN_SECONDS - timeTaken);
-                    showError("Wait!", `You are too fast. Please complete the shortener properly (${wait}s left).`);
-                    await codeRef.update({ started_at: null }); // Punishment
-                    return;
-                }
-
+                // 4. VERIFY
                 verifyUser(did || 'unknown', code, uid);
 
             } catch(e) { showError("System Error", e.message); }
@@ -139,7 +126,7 @@
         icon.className = "icon-wrapper status-loading";
         icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
         document.getElementById('finalTitle').innerText = "Verifying...";
-        document.getElementById('finalDesc').innerText = "Finalizing security check...";
+        document.getElementById('finalDesc').innerText = "Finalizing...";
 
         try {
             const ref = database.ref(`users/${uid}/verification_codes/${code}`);
@@ -156,9 +143,7 @@
 
             showSuccess(expiry);
 
-        } catch(e) { 
-            showError("Failed", "Verification update failed. Try again.");
-        }
+        } catch(e) { showError("Failed", "Verification update failed."); }
     }
 
     function showView(name) { Object.values(views).forEach(v => v.classList.remove('active')); views[name].classList.add('active'); }
@@ -186,7 +171,6 @@
         document.getElementById('errTitle').innerText = t;
         document.getElementById('errDesc').innerText = m;
     }
-    
     window.onload = init;
 </script>
 </body>
