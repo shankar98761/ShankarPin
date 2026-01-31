@@ -12,9 +12,6 @@
     <style>
         :root { --bg-dark:#09090b; --glass:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.08); --neon-blue:#3b82f6; --neon-green:#10b981; --neon-red:#ef4444; }
         body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg-dark); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
-        
-        /* URL Hiding Trick: Agar user direct kholta hai to content center me rahega */
-        
         .card { background:var(--glass); backdrop-filter:blur(20px); border:1px solid var(--border); width:100%; max-width:380px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:floatUp 0.6s ease; }
         .card.active { display:block; }
         @keyframes floatUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
@@ -24,14 +21,12 @@
         .status-success { color:var(--neon-green); border-color:rgba(16,185,129,0.3); }
         .status-error { color:var(--neon-red); border-color:rgba(239,68,68,0.3); }
         
-        .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:20px; box-shadow:0 10px 20px -5px rgba(37,99,235,0.4); }
-        .btn-retry { background:linear-gradient(135deg,#ef4444,#dc2626); box-shadow:0 10px 20px -5px rgba(220,38,38,0.4); }
+        .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:20px; }
+        .btn:disabled { background:#333; cursor:not-allowed; }
+        .btn-retry { background:linear-gradient(135deg,#ef4444,#dc2626); }
         
         .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon-blue); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
         @keyframes spin { 100% { transform:rotate(360deg); } }
-        
-        h1 { font-size:22px; margin-bottom:10px; }
-        p { font-size:14px; color:#aaa; line-height:1.6; }
     </style>
 </head>
 <body>
@@ -57,7 +52,7 @@
     </div>
 
 <script>
-    // --- FIREBASE CONFIG ---
+    // --- FIREBASE CONFIG (Paste Yours) ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -82,6 +77,11 @@
         window.history.replaceState({}, document.title, clean);
     }
 
+    function getParam(name) {
+        const urlParams = new URLSearchParams(window.location.search);
+        return urlParams.get(name);
+    }
+
     async function init() {
         // 1. Check LocalStorage for Already Verified
         const local = localStorage.getItem('my_app_verification');
@@ -89,13 +89,13 @@
             try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
         }
 
-        // 2. CHECK BRIDGE DATA (Hidden in Browser Memory)
-        const bridgeData = localStorage.getItem('secure_bridge_data');
+        // 2. CHECK TOKEN FROM URL (Dynamic Security)
+        const token = getParam('token');
+        const code = getParam('code');
+        const uid = getParam('uid');
+        const did = getParam('did');
         
-        if(bridgeData) {
-            const data = JSON.parse(bridgeData);
-            const { uid, code, token, did } = data;
-
+        if(token && code && uid) {
             try {
                 const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
                 const snap = await codeRef.once('value');
@@ -104,7 +104,6 @@
                 // SECURITY 1: Token Match
                 if(!codeData || codeData.secret_token !== token) {
                     showError("Invalid Session", "Token mismatch. Please restart from App.");
-                    localStorage.removeItem('secure_bridge_data'); 
                     return;
                 }
 
@@ -124,19 +123,19 @@
                 if(timeTaken < MIN_SECONDS) {
                     const wait = Math.ceil(MIN_SECONDS - timeTaken);
                     showError("Wait!", `You are too fast. Please complete the shortener properly (${wait}s left).`);
-                    // Optional: Reset timer to punish
+                    // Punishment: Reset timer
                     await codeRef.update({ started_at: null });
                     return;
                 }
 
                 // All Good -> Verify
-                verifyUser(did, code, uid);
+                verifyUser(did || 'unknown', code, uid);
 
             } catch(e) { showError("System Error", e.message); }
             return;
         }
 
-        // 3. Direct Access (No Bridge Data)
+        // 3. Direct Access (No Token)
         showError("Access Denied", "Please verify from the App.");
     }
 
@@ -159,7 +158,6 @@
 
             await database.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
-            localStorage.removeItem('secure_bridge_data'); // Cleanup
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
