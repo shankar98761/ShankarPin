@@ -1,0 +1,74 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Secure Redirect</title>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
+    <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
+    <style>
+        body{background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;font-family:sans-serif;margin:0;}
+        .loader{border:3px solid #333;border-top:3px solid #00f3ff;border-radius:50%;width:40px;height:40px;animation:spin 0.8s linear infinite;}
+        @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+        p { margin-top: 20px; font-size: 14px; color: #888; letter-spacing: 1px; }
+    </style>
+</head>
+<body>
+    <div style="text-align:center">
+        <div class="loader" style="margin:0 auto;"></div>
+        <p>SECURING SESSION...</p>
+    </div>
+
+<script>
+    // --- FIREBASE CONFIG (Paste Yours) ---
+    const firebaseConfig = {
+      apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
+      authDomain: "hankarpin.firebaseapp.com",
+      databaseURL: "https://hankarpin-default-rtdb.firebaseio.com",
+      projectId: "hankarpin",
+      storageBucket: "hankarpin.firebasestorage.app",
+      messagingSenderId: "201875395548",
+      appId: "1:201875395548:web:00708191e109c2ba5bf519"
+    };
+
+    if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
+    const db = firebase.database();
+
+    async function init() {
+        const p = new URLSearchParams(window.location.search);
+        const token = p.get('token');
+        const code = p.get('code');
+        const uid = p.get('uid');
+        const did = p.get('did');
+
+        if(token && code && uid) {
+            // 1. Save Hidden Data
+            const sessionData = { token, code, uid, did };
+            localStorage.setItem('secure_bridge_data', JSON.stringify(sessionData));
+
+            // 2. Start Time Trap & Redirect
+            try {
+                // Timer Start karo
+                await db.ref(`users/${uid}/verification_codes/${code}`).update({
+                    started_at: firebase.database.ServerValue.TIMESTAMP
+                });
+                
+                // Config se Shortener Link lo
+                const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
+                
+                if(conf && conf.shortener_api) {
+                    window.location.href = conf.shortener_api; // Redirect to Shortener
+                } else {
+                    document.body.innerHTML = "<p style='color:red'>Setup Error: Shortener Link Missing in Admin Panel</p>";
+                }
+            } catch(e) {
+                document.body.innerHTML = "<p style='color:red'>Connection Error</p>";
+            }
+        } else {
+            document.body.innerHTML = "<p style='color:red'>Invalid Parameters</p>";
+        }
+    }
+    init();
+</script>
+</body>
+</html>

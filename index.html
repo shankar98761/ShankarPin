@@ -8,50 +8,50 @@
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-    
+
     <style>
-        /* ... Same CSS as before ... */
         :root { --bg-dark:#09090b; --glass:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.08); --neon-blue:#3b82f6; --neon-green:#10b981; --neon-red:#ef4444; }
         body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg-dark); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
+        
+        /* URL Hiding Trick: Agar user direct kholta hai to content center me rahega */
+        
         .card { background:var(--glass); backdrop-filter:blur(20px); border:1px solid var(--border); width:100%; max-width:380px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:floatUp 0.6s ease; }
         .card.active { display:block; }
         @keyframes floatUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        
         .icon-wrapper { width:80px; height:80px; margin:0 auto 25px; border-radius:50%; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; font-size:32px; border:1px solid var(--border); box-shadow:0 0 30px rgba(0,0,0,0.2); }
-        .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:10px; }
-        .btn:disabled { background:#333; cursor:not-allowed; }
-        .btn-retry { background:#dc2626; display:none; }
+        .status-loading { color:var(--neon-blue); text-shadow:0 0 15px rgba(59,130,246,0.5); }
+        .status-success { color:var(--neon-green); border-color:rgba(16,185,129,0.3); }
+        .status-error { color:var(--neon-red); border-color:rgba(239,68,68,0.3); }
+        
+        .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:20px; box-shadow:0 10px 20px -5px rgba(37,99,235,0.4); }
+        .btn-retry { background:linear-gradient(135deg,#ef4444,#dc2626); box-shadow:0 10px 20px -5px rgba(220,38,38,0.4); }
+        
         .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon-blue); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
         @keyframes spin { 100% { transform:rotate(360deg); } }
-        .timer-val { font-size:28px; font-weight:700; color:var(--neon-green); font-family:monospace; margin-top:5px; }
-        .status-error { color:var(--neon-red); border-color:rgba(239,68,68,0.3); }
-        .status-success { color:var(--neon-green); border-color:rgba(16,185,129,0.3); }
+        
+        h1 { font-size:22px; margin-bottom:10px; }
+        p { font-size:14px; color:#aaa; line-height:1.6; }
     </style>
 </head>
 <body>
 
     <div id="viewLoad" class="card active"><div class="spinner"></div><p>Checking Security...</p></div>
 
-    <div id="viewStep1" class="card">
-        <div class="icon-wrapper status-error"><i class="fas fa-exclamation-triangle"></i></div>
-        <h1>Link Expired</h1>
-        <p style="color:#aaa;">This link is invalid or expired. Please start again from the App.</p>
-        <button class="btn" onclick="window.close()">CLOSE</button>
-    </div>
-
-    <div id="viewTrap" class="card">
-        <div class="icon-wrapper" style="color:var(--neon-blue)"><i class="fas fa-hourglass-half"></i></div>
-        <h1>Security Check</h1>
-        <p>Please wait while we verify your session token...</p>
-        <button class="btn" id="btnStartTrap" onclick="startTrap()">I AM HUMAN</button>
+    <div id="viewError" class="card">
+        <div class="icon-wrapper status-error"><i class="fas fa-lock"></i></div>
+        <h1 id="errTitle">Access Denied</h1>
+        <p id="errDesc">Please verify from the App.</p>
+        <button class="btn btn-retry" onclick="window.close()">CLOSE</button>
     </div>
 
     <div id="viewFinal" class="card">
         <div class="icon-wrapper" id="finalIcon"></div>
         <h1 id="finalTitle"></h1>
-        <p id="finalDesc" style="color:#aaa; font-size:14px;"></p>
-        <div id="timerArea" style="display:none; background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; margin-bottom:20px;">
+        <p id="finalDesc"></p>
+        <div id="timerArea" style="display:none; background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; margin-bottom:20px; margin-top:20px;">
             <div style="font-size:10px; color:#888;">ACCESS GRANTED FOR</div>
-            <div class="timer-val" id="timerDisplay">00:00:00</div>
+            <div id="timerDisplay" style="font-size:28px; font-weight:700; color:var(--neon-green); font-family:monospace; margin-top:5px;">00:00:00</div>
         </div>
         <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Return to App</button>
     </div>
@@ -67,129 +67,87 @@
       messagingSenderId: "201875395548",
       appId: "1:201875395548:web:00708191e109c2ba5bf519"
     };
+
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    const MIN_SECONDS = 45; 
-    const views = { load:document.getElementById('viewLoad'), step1:document.getElementById('viewStep1'), trap:document.getElementById('viewTrap'), final:document.getElementById('viewFinal') };
+    const MIN_SECONDS = 45; // 45 Seconds Time Trap
     
-    function getParam(name) {
-        const urlParams = new URLSearchParams(window.location.search);
-        return urlParams.get(name);
-    }
+    // UI Elements
+    const views = { load:document.getElementById('viewLoad'), error:document.getElementById('viewError'), final:document.getElementById('viewFinal') };
     
-    function cleanUrl() {
-        if(window.history.replaceState) {
-            const clean = window.location.href.split('?')[0].split('#')[0];
-            window.history.replaceState({}, document.title, clean);
-        }
+    // Clean URL Immediately (Hidden Token Logic)
+    if(window.history.replaceState) {
+        const clean = window.location.href.split('?')[0].split('#')[0];
+        window.history.replaceState({}, document.title, clean);
     }
 
     async function init() {
-        // Params from URL (Passed by Shortener)
-        const did = getParam('device'); 
-        const code = getParam('code'); 
-        const uid = getParam('uid'); 
-        const token = getParam('token'); 
-        
-        if(did || code || uid || token) cleanUrl();
-
-        // 1. Check LocalStorage (Already Verified)
+        // 1. Check LocalStorage for Already Verified
         const local = localStorage.getItem('my_app_verification');
         if(local) {
             try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
         }
 
-        // 2. TOKEN VERIFICATION (Dynamic)
-        if(did && code && uid && token) {
+        // 2. CHECK BRIDGE DATA (Hidden in Browser Memory)
+        const bridgeData = localStorage.getItem('secure_bridge_data');
+        
+        if(bridgeData) {
+            const data = JSON.parse(bridgeData);
+            const { uid, code, token, did } = data;
+
             try {
-                // Fetch Code Data from Firebase
                 const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
                 const snap = await codeRef.once('value');
-                const data = snap.val();
+                const codeData = snap.val();
 
-                // CHECK 1: Token Match
-                // Agar URL ka token Database ke token se match nahi hua -> FAKE LINK
-                if(!data || data.secret_token !== token) {
-                    showView('step1'); // Invalid Link
+                // SECURITY 1: Token Match
+                if(!codeData || codeData.secret_token !== token) {
+                    showError("Invalid Session", "Token mismatch. Please restart from App.");
+                    localStorage.removeItem('secure_bridge_data'); 
                     return;
                 }
 
-                // CHECK 2: Start Time (Time Trap)
-                // Agar start time nahi hai, to hum abhi set karenge (User just arrived)
-                // Note: Is logic mein, user ko page par 45s wait karna hoga.
-                if(!data.started_at) {
-                    // Set Start Time
-                    await codeRef.update({ started_at: firebase.database.ServerValue.TIMESTAMP });
-                    showView('trap'); // Show "I am Human" or Wait screen
-                    localStorage.setItem('pending_session', JSON.stringify({did, code, uid, token}));
+                // SECURITY 2: Already Used
+                if(codeData.used) {
+                    showError("Expired", "This link has already been used.");
                     return;
                 }
 
-                // CHECK 3: Time Elapsed
-                const timeTaken = (Date.now() - data.started_at) / 1000;
+                // SECURITY 3: Time Trap (45s Check)
+                if(!codeData.started_at) {
+                    showError("Error", "Session not initialized properly.");
+                    return;
+                }
+                const timeTaken = (Date.now() - codeData.started_at) / 1000;
+                
                 if(timeTaken < MIN_SECONDS) {
-                    // Agar jaldi aa gaya
-                    showView('trap');
-                    localStorage.setItem('pending_session', JSON.stringify({did, code, uid, token}));
+                    const wait = Math.ceil(MIN_SECONDS - timeTaken);
+                    showError("Wait!", `You are too fast. Please complete the shortener properly (${wait}s left).`);
+                    // Optional: Reset timer to punish
+                    await codeRef.update({ started_at: null });
                     return;
                 }
 
-                // Verify
+                // All Good -> Verify
                 verifyUser(did, code, uid);
 
-            } catch(e) { showView('step1'); }
+            } catch(e) { showError("System Error", e.message); }
             return;
         }
-        
-        // 3. Trap Button Click Logic (If user is waiting on page)
-        const pending = localStorage.getItem('pending_session');
-        if(pending) {
-             // User wapis aaya ya page refresh kiya
-             const p = JSON.parse(pending);
-             initSession(p.did, p.code, p.uid, p.token); // Restart check
-             return;
-        }
 
-        showView('step1');
-    }
-    
-    // Helper to re-run init with stored params
-    async function initSession(did, code, uid, token) {
-         try {
-            const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
-            const data = (await codeRef.once('value')).val();
-            
-            const timeTaken = (Date.now() - data.started_at) / 1000;
-            if(timeTaken < MIN_SECONDS) {
-                 // Still waiting
-                 showView('trap');
-                 const remaining = Math.ceil(MIN_SECONDS - timeTaken);
-                 document.getElementById('btnStartTrap').innerText = `PLEASE WAIT ${remaining}s`;
-                 document.getElementById('btnStartTrap').disabled = true;
-                 
-                 // Auto countdown
-                 setTimeout(() => initSession(did, code, uid, token), 1000);
-                 return;
-            }
-            verifyUser(did, code, uid);
-         } catch(e) {}
-    }
-
-    async function startTrap() {
-        // Just triggers re-check
-        const pending = localStorage.getItem('pending_session');
-        if(pending) {
-            const p = JSON.parse(pending);
-            initSession(p.did, p.code, p.uid, p.token);
-        }
+        // 3. Direct Access (No Bridge Data)
+        showError("Access Denied", "Please verify from the App.");
     }
 
     async function verifyUser(did, code, uid) {
         showView('final');
-        document.getElementById('finalIcon').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        const icon = document.getElementById('finalIcon');
+        icon.className = "icon-wrapper status-loading";
+        icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
         document.getElementById('finalTitle').innerText = "Verifying...";
-        
+        document.getElementById('finalDesc').innerText = "Finalizing security check...";
+
         try {
             const ref = database.ref(`users/${uid}/verification_codes/${code}`);
             await ref.update({ used: true, used_at: firebase.database.ServerValue.TIMESTAMP });
@@ -201,21 +159,18 @@
 
             await database.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
-            localStorage.removeItem('pending_session');
+            localStorage.removeItem('secure_bridge_data'); // Cleanup
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
 
         } catch(e) { 
-            showView('step1');
+            showError("Failed", "Verification update failed. Try again.");
         }
     }
 
-    function showView(name) {
-        Object.values(views).forEach(v => v.classList.remove('active'));
-        views[name].classList.add('active');
-    }
-
+    function showView(name) { Object.values(views).forEach(v => v.classList.remove('active')); views[name].classList.add('active'); }
+    
     function showSuccess(expiry, isRevisit=false) {
         showView('final');
         const icon = document.getElementById('finalIcon');
@@ -234,6 +189,11 @@
         }, 1000);
     }
 
+    function showError(t, m) {
+        showView('error');
+        document.getElementById('errTitle').innerText = t;
+        document.getElementById('errDesc').innerText = m;
+    }
     window.onload = init;
 </script>
 </body>
