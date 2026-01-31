@@ -24,7 +24,6 @@
         .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:20px; }
         .btn:disabled { background:#333; cursor:not-allowed; }
         .btn-retry { background:linear-gradient(135deg,#ef4444,#dc2626); }
-        
         .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon-blue); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
         @keyframes spin { 100% { transform:rotate(360deg); } }
     </style>
@@ -52,7 +51,7 @@
     </div>
 
 <script>
-    // --- FIREBASE CONFIG (Paste Yours) ---
+    // --- FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -68,7 +67,6 @@
 
     const MIN_SECONDS = 45; // 45 Seconds Time Trap
     
-    // UI Elements
     const views = { load:document.getElementById('viewLoad'), error:document.getElementById('viewError'), final:document.getElementById('viewFinal') };
     
     // Clean URL Immediately (Hidden Token Logic)
@@ -83,13 +81,12 @@
     }
 
     async function init() {
-        // 1. Check LocalStorage for Already Verified
         const local = localStorage.getItem('my_app_verification');
         if(local) {
             try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
         }
 
-        // 2. CHECK TOKEN FROM URL (Dynamic Security)
+        // Get Params
         const token = getParam('token');
         const code = getParam('code');
         const uid = getParam('uid');
@@ -101,21 +98,21 @@
                 const snap = await codeRef.once('value');
                 const codeData = snap.val();
 
-                // SECURITY 1: Token Match
+                // 1. TOKEN MATCH
                 if(!codeData || codeData.secret_token !== token) {
-                    showError("Invalid Session", "Token mismatch. Please restart from App.");
+                    showError("Invalid Session", "Token mismatch. Restart from App.");
                     return;
                 }
 
-                // SECURITY 2: Already Used
+                // 2. EXPIRED
                 if(codeData.used) {
                     showError("Expired", "This link has already been used.");
                     return;
                 }
 
-                // SECURITY 3: Time Trap (45s Check)
+                // 3. TIME TRAP
                 if(!codeData.started_at) {
-                    showError("Error", "Session not initialized properly.");
+                    showError("Error", "Session invalid.");
                     return;
                 }
                 const timeTaken = (Date.now() - codeData.started_at) / 1000;
@@ -123,19 +120,16 @@
                 if(timeTaken < MIN_SECONDS) {
                     const wait = Math.ceil(MIN_SECONDS - timeTaken);
                     showError("Wait!", `You are too fast. Please complete the shortener properly (${wait}s left).`);
-                    // Punishment: Reset timer
-                    await codeRef.update({ started_at: null });
+                    await codeRef.update({ started_at: null }); // Punishment
                     return;
                 }
 
-                // All Good -> Verify
                 verifyUser(did || 'unknown', code, uid);
 
             } catch(e) { showError("System Error", e.message); }
             return;
         }
 
-        // 3. Direct Access (No Token)
         showError("Access Denied", "Please verify from the App.");
     }
 
@@ -192,6 +186,7 @@
         document.getElementById('errTitle').innerText = t;
         document.getElementById('errDesc').innerText = m;
     }
+    
     window.onload = init;
 </script>
 </body>
