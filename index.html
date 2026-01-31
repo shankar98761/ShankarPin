@@ -73,47 +73,44 @@
         window.history.replaceState({}, document.title, clean);
     }
 
-    function getParam(name) {
-        return new URLSearchParams(window.location.search).get(name);
-    }
-
     function openApp() {
         window.location.href = "rlxpin://verify";
     }
 
     async function init() {
-        // 1. Check LocalStorage
         const local = localStorage.getItem('my_app_verification');
         if(local) {
             try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
         }
 
-        const token = getParam('token');
-        const code = getParam('code');
-        const uid = getParam('uid');
-        const did = getParam('did');
+        // --- CHECK LOCAL STORAGE (Bridge Data) ---
+        const bridgeData = localStorage.getItem('secure_bridge_data');
         
-        if(token && code && uid) {
+        if(bridgeData) {
+            const data = JSON.parse(bridgeData);
+            const { uid, code, token, did } = data;
+
             try {
                 const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
                 const snap = await codeRef.once('value');
                 const codeData = snap.val();
 
-                // 1. DATA NOT FOUND (Time Trap Active / Fake Link)
+                // 1. NO DATA (Time Trap Active - App hasn't uploaded yet)
                 if(!codeData) {
-                    showError("Invalid Verification", "Session data not found. Please verify from the App.");
+                    showError("Invalid Verification", "Session data not found. You might be too fast.");
                     return;
                 }
 
                 // 2. TOKEN MISMATCH
                 if(codeData.secret_token !== token) {
                     showError("Invalid Verification", "Security token mismatch.");
+                    localStorage.removeItem('secure_bridge_data');
                     return;
                 }
 
                 // 3. EXPIRED
                 if(codeData.used) {
-                    showError("Link Expired", "This verification link has already been used.");
+                    showError("Expired", "Link already used.");
                     return;
                 }
 
@@ -124,14 +121,14 @@
             return;
         }
 
+        // Direct URL Check (Fail)
         showError("Access Denied", "Please verify from the App.");
     }
 
     async function verifyUser(did, code, uid) {
         showView('final');
-        const icon = document.getElementById('finalIcon');
-        icon.className = "icon-wrapper status-loading";
-        icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        document.getElementById('finalIcon').className = "icon-wrapper status-loading";
+        document.getElementById('finalIcon').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
         document.getElementById('finalTitle').innerText = "Verifying...";
         document.getElementById('finalDesc').innerText = "Finalizing security check...";
 
@@ -146,6 +143,7 @@
 
             await database.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
+            localStorage.removeItem('secure_bridge_data'); // Cleanup
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
             showSuccess(expiry);
