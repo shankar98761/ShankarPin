@@ -3,139 +3,61 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Secure Gateway</title>
+    <title>Secure Verification</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
-
+    
     <style>
-        :root {
-            --bg-dark: #09090b;
-            --glass: rgba(255, 255, 255, 0.03);
-            --border: rgba(255, 255, 255, 0.08);
-            --neon-blue: #3b82f6;
-            --neon-green: #10b981;
-            --neon-red: #ef4444;
-            --text-main: #ffffff;
-            --text-muted: #a1a1aa;
-        }
-
-        body {
-            margin: 0; padding: 20px;
-            font-family: 'Outfit', sans-serif;
-            background-color: var(--bg-dark);
-            background-image: 
-                radial-gradient(at 0% 0%, rgba(59, 130, 246, 0.15) 0px, transparent 50%),
-                radial-gradient(at 100% 100%, rgba(16, 185, 129, 0.1) 0px, transparent 50%);
-            min-height: 100vh;
-            display: flex; align-items: center; justify-content: center;
-            color: var(--text-main);
-        }
-
-        /* --- Dark Glossy Card --- */
-        .card {
-            background: var(--glass);
-            backdrop-filter: blur(20px); -webkit-backdrop-filter: blur(20px);
-            border: 1px solid var(--border);
-            width: 100%; max-width: 380px;
-            padding: 40px 30px;
-            border-radius: 24px;
-            text-align: center;
-            box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.5);
-            display: none; /* Hidden by default */
-            animation: floatUp 0.6s cubic-bezier(0.16, 1, 0.3, 1);
-        }
-        .card.active { display: block; }
-
-        @keyframes floatUp { from { opacity: 0; transform: translateY(20px) scale(0.95); } to { opacity: 1; transform: translateY(0) scale(1); } }
-
-        /* --- Icon Glow --- */
-        .icon-wrapper {
-            width: 80px; height: 80px; margin: 0 auto 25px;
-            border-radius: 50%;
-            background: rgba(255, 255, 255, 0.03);
-            border: 1px solid var(--border);
-            display: flex; align-items: center; justify-content: center;
-            font-size: 32px;
-            box-shadow: 0 0 30px rgba(0,0,0,0.2);
-            position: relative;
-        }
-        .icon-wrapper::after { content:''; position: absolute; inset: -5px; border-radius: 50%; padding: 2px; background: linear-gradient(180deg, rgba(255,255,255,0.1), transparent); -webkit-mask: linear-gradient(#fff 0 0) content-box, linear-gradient(#fff 0 0); -webkit-mask-composite: xor; mask-composite: exclude; }
-
-        .status-loading { color: var(--neon-blue); text-shadow: 0 0 15px rgba(59, 130, 246, 0.5); }
-        .status-success { color: var(--neon-green); text-shadow: 0 0 15px rgba(16, 185, 129, 0.5); border-color: rgba(16, 185, 129, 0.3); }
-        .status-error { color: var(--neon-red); text-shadow: 0 0 15px rgba(239, 68, 68, 0.5); border-color: rgba(239, 68, 68, 0.3); }
-
-        h1 { font-size: 22px; font-weight: 600; margin-bottom: 10px; letter-spacing: -0.5px; }
-        p { font-size: 14px; color: var(--text-muted); line-height: 1.6; margin-bottom: 30px; font-weight: 300; }
-
-        /* --- Buttons --- */
-        .btn {
-            width: 100%; padding: 16px;
-            border-radius: 14px; border: none;
-            font-weight: 600; font-size: 15px; letter-spacing: 0.5px;
-            cursor: pointer; transition: all 0.3s ease;
-            background: linear-gradient(135deg, var(--neon-blue), #2563eb);
-            color: white;
-            box-shadow: 0 10px 20px -5px rgba(37, 99, 235, 0.4);
-            position: relative; overflow: hidden;
-        }
-        .btn::before { content:''; position: absolute; top:0; left:-100%; width:100%; height:100%; background: linear-gradient(90deg, transparent, rgba(255,255,255,0.2), transparent); transition: 0.5s; }
-        .btn:hover::before { left: 100%; }
-        .btn:hover { transform: translateY(-2px); box-shadow: 0 15px 30px -5px rgba(37, 99, 235, 0.5); }
-        .btn:active { transform: translateY(0); }
-        .btn:disabled { background: #3f3f46; color: #71717a; cursor: not-allowed; box-shadow: none; }
-
-        .btn-retry { background: linear-gradient(135deg, #ef4444, #dc2626); box-shadow: 0 10px 20px -5px rgba(220, 38, 38, 0.4); margin-top: 15px; }
-        
-        /* --- Timer Display --- */
-        .timer-container {
-            background: rgba(0,0,0,0.3); border: 1px solid var(--border);
-            border-radius: 16px; padding: 20px; margin-bottom: 25px;
-        }
-        .timer-label { font-size: 11px; text-transform: uppercase; color: var(--text-muted); letter-spacing: 2px; margin-bottom: 8px; font-weight: 700; }
-        .timer-val { font-size: 28px; font-weight: 700; color: var(--neon-green); font-family: monospace; letter-spacing: 2px; text-shadow: 0 0 20px rgba(16, 185, 129, 0.3); }
-
-        .device-tag { font-size: 11px; background: rgba(255,255,255,0.05); padding: 6px 12px; border-radius: 20px; display: inline-block; color: var(--text-muted); font-family: monospace; border: 1px solid var(--border); }
-
-        /* --- Loader --- */
-        .spinner { width: 40px; height: 40px; border: 3px solid rgba(255,255,255,0.1); border-top-color: var(--neon-blue); border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; }
-        @keyframes spin { 100% { transform: rotate(360deg); } }
+        /* ... Same CSS as before ... */
+        :root { --bg-dark:#09090b; --glass:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.08); --neon-blue:#3b82f6; --neon-green:#10b981; --neon-red:#ef4444; }
+        body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg-dark); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
+        .card { background:var(--glass); backdrop-filter:blur(20px); border:1px solid var(--border); width:100%; max-width:380px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:floatUp 0.6s ease; }
+        .card.active { display:block; }
+        @keyframes floatUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
+        .icon-wrapper { width:80px; height:80px; margin:0 auto 25px; border-radius:50%; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; font-size:32px; border:1px solid var(--border); box-shadow:0 0 30px rgba(0,0,0,0.2); }
+        .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:10px; }
+        .btn:disabled { background:#333; cursor:not-allowed; }
+        .btn-retry { background:#dc2626; display:none; }
+        .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon-blue); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
+        @keyframes spin { 100% { transform:rotate(360deg); } }
+        .timer-val { font-size:28px; font-weight:700; color:var(--neon-green); font-family:monospace; margin-top:5px; }
+        .status-error { color:var(--neon-red); border-color:rgba(239,68,68,0.3); }
+        .status-success { color:var(--neon-green); border-color:rgba(16,185,129,0.3); }
     </style>
 </head>
 <body>
 
-    <div id="viewLoad" class="card active">
-        <div class="spinner"></div>
-        <p style="margin:0">Secure Handshake...</p>
-    </div>
+    <div id="viewLoad" class="card active"><div class="spinner"></div><p>Checking Security...</p></div>
 
     <div id="viewStep1" class="card">
-        <div class="icon-wrapper status-loading"><i class="fas fa-shield-halved"></i></div>
-        <h1>Device Verification</h1>
-        <p>Complete the security check to unlock premium features on your device.</p>
-        <button class="btn" id="btnVerifyLink" onclick="goToShortener()">VERIFY ACCESS</button>
+        <div class="icon-wrapper status-error"><i class="fas fa-exclamation-triangle"></i></div>
+        <h1>Link Expired</h1>
+        <p style="color:#aaa;">This link is invalid or expired. Please start again from the App.</p>
+        <button class="btn" onclick="window.close()">CLOSE</button>
+    </div>
+
+    <div id="viewTrap" class="card">
+        <div class="icon-wrapper" style="color:var(--neon-blue)"><i class="fas fa-hourglass-half"></i></div>
+        <h1>Security Check</h1>
+        <p>Please wait while we verify your session token...</p>
+        <button class="btn" id="btnStartTrap" onclick="startTrap()">I AM HUMAN</button>
     </div>
 
     <div id="viewFinal" class="card">
         <div class="icon-wrapper" id="finalIcon"></div>
         <h1 id="finalTitle"></h1>
-        <p id="finalDesc"></p>
-        
-        <div id="timerArea" class="timer-container" style="display:none;">
-            <div class="timer-label">ACCESS GRANTED FOR</div>
+        <p id="finalDesc" style="color:#aaa; font-size:14px;"></p>
+        <div id="timerArea" style="display:none; background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; margin-bottom:20px;">
+            <div style="font-size:10px; color:#888;">ACCESS GRANTED FOR</div>
             <div class="timer-val" id="timerDisplay">00:00:00</div>
         </div>
-
-        <div id="didDisplay" class="device-tag" style="display:none;"></div>
-
-        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none; margin-top:20px;">Return to App</button>
-        <button class="btn btn-retry" id="retryBtn" onclick="retryProcess()" style="display:none;">Retry Verification</button>
+        <button class="btn" id="finalBtn" onclick="window.close()" style="display:none">Return to App</button>
     </div>
 
 <script>
-    // --- UPDATE YOUR FIREBASE CONFIG HERE ---
+    // --- FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -145,36 +67,18 @@
       messagingSenderId: "201875395548",
       appId: "1:201875395548:web:00708191e109c2ba5bf519"
     };
-
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
     const database = firebase.database();
 
-    // --- CONFIGURATION ---
-    const MIN_SECONDS_REQUIRED = 45; // Updated to 45 Seconds
+    const MIN_SECONDS = 45; 
+    const views = { load:document.getElementById('viewLoad'), step1:document.getElementById('viewStep1'), trap:document.getElementById('viewTrap'), final:document.getElementById('viewFinal') };
     
-    // UI Elements
-    const views = { load: document.getElementById('viewLoad'), step1: document.getElementById('viewStep1'), final: document.getElementById('viewFinal') };
-    const els = {
-        icon: document.getElementById('finalIcon'),
-        title: document.getElementById('finalTitle'),
-        desc: document.getElementById('finalDesc'),
-        timerArea: document.getElementById('timerArea'),
-        timerDisp: document.getElementById('timerDisplay'),
-        didDisp: document.getElementById('didDisplay'),
-        btnFinal: document.getElementById('finalBtn'),
-        btnRetry: document.getElementById('retryBtn'),
-        btnStart: document.getElementById('btnVerifyLink')
-    };
-    
-    let shortenerUrl = "";
-
     function getParam(name) {
         const urlParams = new URLSearchParams(window.location.search);
-        const hashParams = new URLSearchParams(window.location.hash.substring(1));
-        return urlParams.get(name) || hashParams.get(name);
+        return urlParams.get(name);
     }
     
-    function cleanAddressBar() {
+    function cleanUrl() {
         if(window.history.replaceState) {
             const clean = window.location.href.split('?')[0].split('#')[0];
             window.history.replaceState({}, document.title, clean);
@@ -182,142 +86,128 @@
     }
 
     async function init() {
-        const did = getParam('device'); const code = getParam('code'); const uid = getParam('uid'); const urlKey = getParam('key'); 
-        if(did || code || uid || urlKey) cleanAddressBar();
+        // Params from URL (Passed by Shortener)
+        const did = getParam('device'); 
+        const code = getParam('code'); 
+        const uid = getParam('uid'); 
+        const token = getParam('token'); 
+        
+        if(did || code || uid || token) cleanUrl();
 
         // 1. Check LocalStorage (Already Verified)
-        const localSaved = localStorage.getItem('my_app_verification');
-        if(localSaved) {
-            try {
-                const ld = JSON.parse(localSaved);
-                if(Date.now() < ld.expiry) { showSuccess(ld.expiry, ld.did, true); return; }
-            } catch(e) { localStorage.removeItem('my_app_verification'); }
+        const local = localStorage.getItem('my_app_verification');
+        if(local) {
+            try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
         }
 
-        // 2. Fresh Entry from App
-        if(did && code && uid) {
-            localStorage.setItem('pending_verif', JSON.stringify({ did, code, uid }));
+        // 2. TOKEN VERIFICATION (Dynamic)
+        if(did && code && uid && token) {
             try {
-                const conf = (await database.ref(`users/${uid}/config`).once('value')).val();
-                if(conf && conf.shortener_api) {
-                    shortenerUrl = conf.shortener_api;
-                    showView('step1');
-                } else {
-                    verifyUser(did, code, uid); // Fallback
-                }
-            } catch(e) { showView('step1'); } // Network error? Show retry button
-            return;
-        }
+                // Fetch Code Data from Firebase
+                const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
+                const snap = await codeRef.once('value');
+                const data = snap.val();
 
-        // 3. Return from Shortener (Validate)
-        const pending = localStorage.getItem('pending_verif');
-        if(pending) {
-            const data = JSON.parse(pending);
-            try {
-                // Fetch Config for Secret Key
-                const confSnap = await database.ref(`users/${data.uid}/config`).once('value');
-                const conf = confSnap.val();
-                
-                // --- SECURITY: Key Check ---
-                const realSecret = (conf && conf.secret_key) ? conf.secret_key : 'v=1';
-                if(urlKey !== realSecret) {
-                    // SILENT RESET: Invalid key -> Show Step 1
-                    if(conf) shortenerUrl = conf.shortener_api;
-                    showView('step1');
+                // CHECK 1: Token Match
+                // Agar URL ka token Database ke token se match nahi hua -> FAKE LINK
+                if(!data || data.secret_token !== token) {
+                    showView('step1'); // Invalid Link
                     return;
                 }
 
-                // --- SECURITY: Server Time Trap ---
-                const codeRef = database.ref(`users/${data.uid}/verification_codes/${data.code}`);
-                const codeData = (await codeRef.once('value')).val();
-
-                if(!codeData) { showView('step1'); return; } // Invalid code
-                if(!codeData.started_at) { showView('step1'); return; } // Direct link open (No click)
-
-                const timeTaken = (Date.now() - codeData.started_at) / 1000;
-                
-                // 45 Seconds Check
-                if(timeTaken < MIN_SECONDS_REQUIRED) {
-                     showError("Process Too Fast", "Please complete the shortener process properly. Do not skip.");
-                     await codeRef.update({ started_at: null }); // Force restart
-                     return;
+                // CHECK 2: Start Time (Time Trap)
+                // Agar start time nahi hai, to hum abhi set karenge (User just arrived)
+                // Note: Is logic mein, user ko page par 45s wait karna hoga.
+                if(!data.started_at) {
+                    // Set Start Time
+                    await codeRef.update({ started_at: firebase.database.ServerValue.TIMESTAMP });
+                    showView('trap'); // Show "I am Human" or Wait screen
+                    localStorage.setItem('pending_session', JSON.stringify({did, code, uid, token}));
+                    return;
                 }
 
-                // All Valid
-                verifyUser(data.did, data.code, data.uid);
+                // CHECK 3: Time Elapsed
+                const timeTaken = (Date.now() - data.started_at) / 1000;
+                if(timeTaken < MIN_SECONDS) {
+                    // Agar jaldi aa gaya
+                    showView('trap');
+                    localStorage.setItem('pending_session', JSON.stringify({did, code, uid, token}));
+                    return;
+                }
 
-            } catch(e) { showError("System Error", e.message); }
+                // Verify
+                verifyUser(did, code, uid);
+
+            } catch(e) { showView('step1'); }
             return;
         }
-
-        // Nothing found
-        showError("Link Expired", "Please open this page from the App again.");
-    }
-
-    async function goToShortener() {
-        if(!shortenerUrl) { window.location.reload(); return; }
         
-        els.btnStart.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i> Processing...';
-        els.btnStart.disabled = true;
-
-        const pending = localStorage.getItem('pending_verif');
+        // 3. Trap Button Click Logic (If user is waiting on page)
+        const pending = localStorage.getItem('pending_session');
         if(pending) {
-            const data = JSON.parse(pending);
-            try {
-                // Save Server Timestamp
-                await database.ref(`users/${data.uid}/verification_codes/${data.code}`).update({
-                    started_at: firebase.database.ServerValue.TIMESTAMP
-                });
-                window.location.href = shortenerUrl;
-            } catch(e) {
-                alert("Connection Failed. Try Again.");
-                els.btnStart.innerHTML = "VERIFY ACCESS";
-                els.btnStart.disabled = false;
-            }
+             // User wapis aaya ya page refresh kiya
+             const p = JSON.parse(pending);
+             initSession(p.did, p.code, p.uid, p.token); // Restart check
+             return;
         }
+
+        showView('step1');
+    }
+    
+    // Helper to re-run init with stored params
+    async function initSession(did, code, uid, token) {
+         try {
+            const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
+            const data = (await codeRef.once('value')).val();
+            
+            const timeTaken = (Date.now() - data.started_at) / 1000;
+            if(timeTaken < MIN_SECONDS) {
+                 // Still waiting
+                 showView('trap');
+                 const remaining = Math.ceil(MIN_SECONDS - timeTaken);
+                 document.getElementById('btnStartTrap').innerText = `PLEASE WAIT ${remaining}s`;
+                 document.getElementById('btnStartTrap').disabled = true;
+                 
+                 // Auto countdown
+                 setTimeout(() => initSession(did, code, uid, token), 1000);
+                 return;
+            }
+            verifyUser(did, code, uid);
+         } catch(e) {}
     }
 
-    function retryProcess() {
-        let clean = window.location.href.split('?')[0].split('#')[0];
-        window.history.replaceState({}, document.title, clean);
-        window.location.reload();
+    async function startTrap() {
+        // Just triggers re-check
+        const pending = localStorage.getItem('pending_session');
+        if(pending) {
+            const p = JSON.parse(pending);
+            initSession(p.did, p.code, p.uid, p.token);
+        }
     }
 
     async function verifyUser(did, code, uid) {
         showView('final');
-        els.icon.className = "icon-wrapper status-loading";
-        els.icon.innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-        els.title.innerText = "Finalizing...";
-        els.desc.innerText = "Connecting to secure server...";
-
+        document.getElementById('finalIcon').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
+        document.getElementById('finalTitle').innerText = "Verifying...";
+        
         try {
             const ref = database.ref(`users/${uid}/verification_codes/${code}`);
-            
-            // Server-Side Lock Check (Firebase Rules will block if < 45s)
-            try {
-                await ref.update({ used: true, used_at: firebase.database.ServerValue.TIMESTAMP });
-            } catch(err) {
-                if(err.code === 'PERMISSION_DENIED') throw "Please wait! Do not skip the timer.";
-                else throw err;
-            }
+            await ref.update({ used: true, used_at: firebase.database.ServerValue.TIMESTAMP });
 
-            // Expiry
             let dur = 86400000;
             const conf = (await database.ref(`users/${uid}/config`).once('value')).val();
             if(conf && conf.verification_minutes) dur = conf.verification_minutes * 60000;
-            
             const expiry = Date.now() + dur;
+
             await database.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
 
-            localStorage.removeItem('pending_verif');
+            localStorage.removeItem('pending_session');
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
 
-            showSuccess(expiry, did);
+            showSuccess(expiry);
 
         } catch(e) { 
-            let msg = e.message || e;
-            if(msg.includes("wait")) showError("Too Fast", "Server rejected. Did you skip the shortener?");
-            else showError("Verification Failed", msg); 
+            showView('step1');
         }
     }
 
@@ -326,39 +216,22 @@
         views[name].classList.add('active');
     }
 
-    function showSuccess(expiry, deviceId, isRevisit=false) {
+    function showSuccess(expiry, isRevisit=false) {
         showView('final');
-        els.icon.className = "icon-wrapper status-success";
-        els.icon.innerHTML = '<i class="fas fa-check"></i>';
-        els.title.innerText = isRevisit ? "Welcome Back" : "Access Granted";
-        els.desc.innerText = "Your device has been successfully verified.";
+        const icon = document.getElementById('finalIcon');
+        icon.className = "icon-wrapper status-success";
+        icon.innerHTML = '<i class="fas fa-check"></i>';
+        document.getElementById('finalTitle').innerText = "Access Granted";
+        document.getElementById('finalDesc').innerText = "Device verified successfully.";
+        document.getElementById('timerArea').style.display = 'block';
+        document.getElementById('finalBtn').style.display = 'block';
         
-        els.timerArea.style.display = 'block';
-        els.didDisp.style.display = 'inline-block';
-        els.didDisp.innerText = "ID: " + deviceId;
-        
-        els.btnFinal.style.display = 'block';
-        els.btnRetry.style.display = 'none';
-
         setInterval(() => {
             const diff = expiry - Date.now();
-            if(diff<=0) return els.timerDisp.innerText = "00:00:00";
+            if(diff<=0) return document.getElementById('timerDisplay').innerText = "00:00:00";
             const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000);
-            els.timerDisp.innerText = `${h}:${m<10?'0'+m:m}:${s<10?'0'+s:s}`;
+            document.getElementById('timerDisplay').innerText = `${h}:${m<10?'0'+m:m}:${s<10?'0'+s:s}`;
         }, 1000);
-    }
-
-    function showError(t, m) {
-        showView('final');
-        els.icon.className = "icon-wrapper status-error";
-        els.icon.innerHTML = '<i class="fas fa-xmark"></i>';
-        els.title.innerText = t;
-        els.desc.innerText = m;
-        
-        els.timerArea.style.display = 'none';
-        els.didDisp.style.display = 'none';
-        els.btnFinal.style.display = 'none';
-        els.btnRetry.style.display = 'block';
     }
 
     window.onload = init;
