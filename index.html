@@ -12,25 +12,18 @@
     <style>
         :root { --bg:#09090b; --card:#121217; --neon:#3b82f6; --success:#10b981; --error:#ef4444; }
         body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
-        
-        .card { background:rgba(20,20,25,0.6); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.08); width:100%; max-width:360px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 20px 50px rgba(0,0,0,0.5); }
+        .card { background:rgba(20,20,25,0.6); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.08); width:100%; max-width:360px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:popIn 0.5s ease; box-shadow:0 20px 50px rgba(0,0,0,0.5); }
         .card.active { display:block; }
         @keyframes popIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
-        
         .icon-box { width:70px; height:70px; margin:0 auto 20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); }
-        .success { color:var(--success); border-color:rgba(16,185,129,0.3); box-shadow:0 0 20px rgba(16,185,129,0.2); }
-        .error { color:var(--error); border-color:rgba(239,68,68,0.3); box-shadow:0 0 20px rgba(239,68,68,0.2); }
-        
+        .success { color:var(--success); border-color:rgba(16,185,129,0.3); }
+        .error { color:var(--error); border-color:rgba(239,68,68,0.3); }
         h1 { font-size:20px; margin:10px 0; font-weight:600; }
         p { color:#888; font-size:14px; line-height:1.5; margin-bottom:25px; }
-        
         .btn { width:100%; padding:15px; border-radius:12px; border:none; font-weight:600; font-size:14px; cursor:pointer; transition:0.2s; text-transform:uppercase; letter-spacing:1px; }
         .btn-green { background:linear-gradient(135deg, #10b981, #059669); color:white; box-shadow:0 10px 20px -5px rgba(16,185,129,0.4); }
         .btn-red { background:rgba(255,255,255,0.05); color:#ef4444; border:1px solid rgba(239,68,68,0.3); }
-        .btn:active { transform:scale(0.98); }
-        
         .timer-display { background:rgba(0,0,0,0.3); padding:10px; border-radius:10px; margin-bottom:20px; font-family:monospace; font-size:22px; color:var(--success); border:1px solid rgba(16,185,129,0.2); }
-        
         .spinner { width:35px; height:35px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
         @keyframes spin { 100% { transform:rotate(360deg); } }
     </style>
@@ -50,13 +43,12 @@
         <div class="icon-box success"><i class="fas fa-check"></i></div>
         <h1>Verification Success</h1>
         <p>Your device has been verified successfully.</p>
-        
         <div class="timer-display" id="timer">00:00:00</div>
-        <button class="btn btn-green" onclick="openApp()">OPEN IN MOD</button>
+        <button class="btn btn-green" onclick="openApp()">OPEN APP NOW 🚀</button>
     </div>
 
 <script>
-    // --- FIREBASE CONFIG ---
+    // --- FIREBASE CONFIG (Paste Yours) ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -72,14 +64,12 @@
 
     const views = { load:document.getElementById('vLoad'), err:document.getElementById('vError'), final:document.getElementById('vFinal') };
     
-    // Auto Clean URL
-    if(window.history.replaceState) {
-        const clean = window.location.href.split('?')[0].split('#')[0];
-        window.history.replaceState({}, document.title, clean);
-    }
-
     function openApp() { window.location.href = "rlxpin://verify"; }
-    function getParam(n) { return new URLSearchParams(window.location.search).get(n); }
+
+    // Helper to get params BEFORE cleaning URL
+    function getParam(name) {
+        return new URLSearchParams(window.location.search).get(name);
+    }
 
     async function init() {
         const local = localStorage.getItem('my_app_verification');
@@ -87,42 +77,50 @@
             try { const d = JSON.parse(local); if(Date.now() < d.expiry) { showSuccess(d.expiry); return; } } catch(e){}
         }
 
-        // 1. Shortener Check (?access=granted)
-        if(getParam('access') !== 'granted') {
+        // --- STEP 1: READ PARAMS (Before cleaning URL) ---
+        const accessKey = getParam('access');
+        
+        // --- STEP 2: CHECK ACCESS KEY (From Shortener) ---
+        if(accessKey !== 'granted') {
             showError("Direct Access Denied", "Please verify using the App only.");
             return;
         }
 
-        // 2. Token Check from Bridge (start.html)
+        // --- STEP 3: CHECK BRIDGE DATA (From start.html) ---
+        // Note: Using localStorage as it is more reliable for redirects
         const bridge = localStorage.getItem('secure_bridge_data');
+        
         if(!bridge) {
             showError("Session Missing", "Complete verification properly from App!");
             return;
         }
 
         const data = JSON.parse(bridge);
+        
         try {
             const snap = await db.ref(`users/${data.uid}/verification_codes/${data.code}`).once('value');
             const server = snap.val();
 
-            // 3. Time Trap Check (Did App upload token?)
+            // Check 1: Time Trap (Data exists on Firebase?)
             if(!server) {
-                // Ye error tab aayega agar user 60 sec se pehle pahunch gaya
                 showError("Invalid Verification", "Complete verification properly from App!"); 
                 return;
             }
 
+            // Check 2: Token Match
             if(server.secret_token !== data.token) {
                 showError("Security Error", "Token mismatch detected.");
+                localStorage.removeItem('secure_bridge_data'); // Security wipe
                 return;
             }
 
+            // Check 3: Used/Expired
             if(server.used) {
                 showError("Link Expired", "This link is already used.");
                 return;
             }
 
-            // Success -> Verify Device
+            // All Good -> Verify
             await verifyDevice(data.did, data.code, data.uid);
 
         } catch(e) { showError("Connection Error", "Please check your internet."); }
@@ -132,14 +130,16 @@
         try {
             await db.ref(`users/${uid}/verification_codes/${code}`).update({ used:true, used_at: firebase.database.ServerValue.TIMESTAMP });
             
-            // Get Duration
             const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
             let duration = (conf && conf.verification_minutes) ? conf.verification_minutes * 60000 : 86400000;
             const expiry = Date.now() + duration;
 
             await db.ref(`users/${uid}/devices/${did}`).set({ verification_time: Date.now(), expiry_time: expiry, last_code: code });
 
+            // CLEANUP (Very Important for Security)
             localStorage.removeItem('secure_bridge_data');
+            
+            // Save Local Success
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
             
             showSuccess(expiry);
@@ -150,6 +150,13 @@
 
     function showSuccess(exp) {
         showView('final');
+        
+        // --- CLEAN URL NOW (Only after success) ---
+        if(window.history.replaceState) {
+            const clean = window.location.href.split('?')[0].split('#')[0];
+            window.history.replaceState({}, document.title, clean);
+        }
+
         setInterval(() => {
             const diff = exp - Date.now();
             if(diff<=0) return document.getElementById('timer').innerText = "00:00:00";
