@@ -3,55 +3,60 @@
 <head>
     <meta charset="utf-8" />
     <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no" />
-    <title>Secure Verification</title>
+    <title>Verification Status</title>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-app.js"></script>
     <script src="https://www.gstatic.com/firebasejs/8.10.1/firebase-database.js"></script>
     <link href="https://fonts.googleapis.com/css2?family=Outfit:wght@300;400;600;700&display=swap" rel="stylesheet">
     <link rel="stylesheet" href="https://cdnjs.cloudflare.com/ajax/libs/font-awesome/6.4.0/css/all.min.css">
 
     <style>
-        :root { --bg-dark:#09090b; --glass:rgba(255,255,255,0.03); --border:rgba(255,255,255,0.08); --neon-blue:#3b82f6; --neon-green:#10b981; --neon-red:#ef4444; }
-        body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg-dark); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
-        .card { background:var(--glass); backdrop-filter:blur(20px); border:1px solid var(--border); width:100%; max-width:380px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:floatUp 0.6s ease; }
+        :root { --bg:#09090b; --card:#121217; --neon:#3b82f6; --success:#10b981; --error:#ef4444; }
+        body { margin:0; padding:20px; font-family:'Outfit',sans-serif; background:var(--bg); min-height:100vh; display:flex; align-items:center; justify-content:center; color:#fff; }
+        
+        .card { background:rgba(20,20,25,0.6); backdrop-filter:blur(20px); border:1px solid rgba(255,255,255,0.08); width:100%; max-width:360px; padding:40px 30px; border-radius:24px; text-align:center; display:none; animation:popIn 0.5s cubic-bezier(0.175, 0.885, 0.32, 1.275); box-shadow:0 20px 50px rgba(0,0,0,0.5); }
         .card.active { display:block; }
-        @keyframes floatUp { from { opacity:0; transform:translateY(20px); } to { opacity:1; transform:translateY(0); } }
-        .icon-wrapper { width:80px; height:80px; margin:0 auto 25px; border-radius:50%; background:rgba(255,255,255,0.03); display:flex; align-items:center; justify-content:center; font-size:32px; border:1px solid var(--border); box-shadow:0 0 30px rgba(0,0,0,0.2); }
-        .status-loading { color:var(--neon-blue); text-shadow:0 0 15px rgba(59,130,246,0.5); }
-        .status-success { color:var(--neon-green); border-color:rgba(16,185,129,0.3); }
-        .status-error { color:var(--neon-red); border-color:rgba(239,68,68,0.3); }
-        .btn { width:100%; padding:16px; border-radius:14px; border:none; font-weight:600; font-size:15px; cursor:pointer; background:linear-gradient(135deg,var(--neon-blue),#2563eb); color:white; margin-top:20px; }
-        .btn:disabled { background:#333; cursor:not-allowed; }
-        .btn-retry { background:linear-gradient(135deg,#ef4444,#dc2626); }
-        .spinner { width:40px; height:40px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon-blue); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
+        @keyframes popIn { from { opacity:0; transform:scale(0.9); } to { opacity:1; transform:scale(1); } }
+        
+        .icon-box { width:70px; height:70px; margin:0 auto 20px; border-radius:50%; display:flex; align-items:center; justify-content:center; font-size:28px; background:rgba(255,255,255,0.03); border:1px solid rgba(255,255,255,0.1); }
+        .success { color:var(--success); border-color:rgba(16,185,129,0.3); box-shadow:0 0 20px rgba(16,185,129,0.2); }
+        .error { color:var(--error); border-color:rgba(239,68,68,0.3); box-shadow:0 0 20px rgba(239,68,68,0.2); }
+        
+        h1 { font-size:20px; margin:10px 0; font-weight:600; }
+        p { color:#888; font-size:14px; line-height:1.5; margin-bottom:25px; }
+        
+        .btn { width:100%; padding:15px; border-radius:12px; border:none; font-weight:600; font-size:14px; cursor:pointer; transition:0.2s; text-transform:uppercase; letter-spacing:1px; }
+        .btn-green { background:linear-gradient(135deg, #10b981, #059669); color:white; box-shadow:0 10px 20px -5px rgba(16,185,129,0.4); }
+        .btn-red { background:rgba(255,255,255,0.05); color:#ef4444; border:1px solid rgba(239,68,68,0.3); }
+        .btn:active { transform:scale(0.98); }
+        
+        .timer-display { background:rgba(0,0,0,0.3); padding:10px; border-radius:10px; margin-bottom:20px; font-family:monospace; font-size:22px; color:var(--success); border:1px solid rgba(16,185,129,0.2); }
+        
+        .spinner { width:35px; height:35px; border:3px solid rgba(255,255,255,0.1); border-top-color:var(--neon); border-radius:50%; animation:spin 1s linear infinite; margin:0 auto 20px; }
         @keyframes spin { 100% { transform:rotate(360deg); } }
     </style>
 </head>
 <body>
 
-    <div id="viewLoad" class="card active"><div class="spinner"></div><p>Checking Security...</p></div>
+    <div id="vLoad" class="card active"><div class="spinner"></div><p>Verifying Security Token...</p></div>
 
-    <div id="viewError" class="card">
-        <div class="icon-wrapper status-error"><i class="fas fa-lock"></i></div>
-        <h1 id="errTitle">Access Denied</h1>
-        <p id="errDesc">Invalid Verification. Please verify properly from the App.</p>
-        <button class="btn btn-retry" onclick="window.close()">CLOSE</button>
+    <div id="vError" class="card">
+        <div class="icon-box error"><i class="fas fa-shield-halved"></i></div>
+        <h1 id="eTitle">Access Denied</h1>
+        <p id="eDesc">Complete verification properly from App!</p>
+        <button class="btn btn-red" onclick="window.close()">CLOSE</button>
     </div>
 
-    <div id="viewFinal" class="card">
-        <div class="icon-wrapper" id="finalIcon"></div>
-        <h1 id="finalTitle"></h1>
-        <p id="finalDesc"></p>
-        <div id="timerArea" style="display:none; background:rgba(0,0,0,0.3); padding:15px; border-radius:12px; margin-bottom:20px; margin-top:20px;">
-            <div style="font-size:10px; color:#888;">ACCESS GRANTED FOR</div>
-            <div id="timerDisplay" style="font-size:28px; font-weight:700; color:var(--neon-green); font-family:monospace; margin-top:5px;">00:00:00</div>
-        </div>
+    <div id="vFinal" class="card">
+        <div class="icon-box success"><i class="fas fa-check"></i></div>
+        <h1>Verification Success</h1>
+        <p>Your device has been verified successfully.</p>
         
-        <button class="btn" id="finalBtn" style="display:none; background: linear-gradient(135deg, #00C853, #64DD17);" onclick="openApp()">OPEN APP 🚀</button>
-        <button class="btn btn-retry" id="retryBtn" onclick="window.close()" style="display:none">CLOSE</button>
+        <div class="timer-display" id="timer">00:00:00</div>
+        <button class="btn btn-green" onclick="openApp()">OPEN IN MOD</button>
     </div>
 
 <script>
-    // --- FIREBASE CONFIG (Paste Yours) ---
+    // --- FIREBASE CONFIG ---
     const firebaseConfig = {
       apiKey: "AIzaSyBhdelX3uMxpw_yptph7Wbt2CEd7xbhLgU",
       authDomain: "hankarpin.firebaseapp.com",
@@ -63,122 +68,102 @@
     };
 
     if (!window.firebase || !firebase.apps.length) firebase.initializeApp(firebaseConfig);
-    const database = firebase.database();
+    const db = firebase.database();
 
-    const views = { load:document.getElementById('viewLoad'), error:document.getElementById('viewError'), final:document.getElementById('viewFinal') };
+    const views = { load:document.getElementById('vLoad'), err:document.getElementById('vError'), final:document.getElementById('vFinal') };
     
-    // Clean URL
+    // Auto Clean URL
     if(window.history.replaceState) {
         const clean = window.location.href.split('?')[0].split('#')[0];
         window.history.replaceState({}, document.title, clean);
     }
 
-    function openApp() {
-        window.location.href = "rlxpin://verify";
-    }
+    function openApp() { window.location.href = "rlxpin://verify"; }
+    function getParam(n) { return new URLSearchParams(window.location.search).get(n); }
 
     async function init() {
         const local = localStorage.getItem('my_app_verification');
         if(local) {
-            try { const ld = JSON.parse(local); if(Date.now() < ld.expiry) { showSuccess(ld.expiry, true); return; } } catch(e) {}
+            try { const d = JSON.parse(local); if(Date.now() < d.expiry) { showSuccess(d.expiry); return; } } catch(e){}
         }
 
-        // --- CHECK LOCAL STORAGE (Bridge Data) ---
-        const bridgeData = localStorage.getItem('secure_bridge_data');
-        
-        if(bridgeData) {
-            const data = JSON.parse(bridgeData);
-            const { uid, code, token, did } = data;
-
-            try {
-                const codeRef = database.ref(`users/${uid}/verification_codes/${code}`);
-                const snap = await codeRef.once('value');
-                const codeData = snap.val();
-
-                // 1. NO DATA (Time Trap Active - App hasn't uploaded yet)
-                if(!codeData) {
-                    showError("Invalid Verification", "Session data not found. You might be too fast.");
-                    return;
-                }
-
-                // 2. TOKEN MISMATCH
-                if(codeData.secret_token !== token) {
-                    showError("Invalid Verification", "Security token mismatch.");
-                    localStorage.removeItem('secure_bridge_data');
-                    return;
-                }
-
-                // 3. EXPIRED
-                if(codeData.used) {
-                    showError("Expired", "Link already used.");
-                    return;
-                }
-
-                // 4. VERIFY
-                verifyUser(did || 'unknown', code, uid);
-
-            } catch(e) { showError("System Error", e.message); }
+        // 1. Shortener Check (?access=granted)
+        if(getParam('access') !== 'granted') {
+            showError("Direct Access Denied", "Please verify using the App only.");
             return;
         }
 
-        // Direct URL Check (Fail)
-        showError("Access Denied", "Please verify from the App.");
+        // 2. Token Check from Bridge (start.html)
+        const bridge = localStorage.getItem('secure_bridge_data');
+        if(!bridge) {
+            showError("Session Missing", "Complete verification properly from App!");
+            return;
+        }
+
+        const data = JSON.parse(bridge);
+        try {
+            const snap = await db.ref(`users/${data.uid}/verification_codes/${data.code}`).once('value');
+            const server = snap.val();
+
+            // 3. Time Trap Check (Did App upload token?)
+            if(!server) {
+                // Ye error tab aayega agar user 60 sec se pehle pahunch gaya
+                showError("Invalid Verification", "Complete verification properly from App!"); 
+                return;
+            }
+
+            if(server.secret_token !== data.token) {
+                showError("Security Error", "Token mismatch detected.");
+                return;
+            }
+
+            if(server.used) {
+                showError("Link Expired", "This link is already used.");
+                return;
+            }
+
+            // Success -> Verify Device
+            await verifyDevice(data.did, data.code, data.uid);
+
+        } catch(e) { showError("Connection Error", "Please check your internet."); }
     }
 
-    async function verifyUser(did, code, uid) {
-        showView('final');
-        document.getElementById('finalIcon').className = "icon-wrapper status-loading";
-        document.getElementById('finalIcon').innerHTML = '<i class="fas fa-circle-notch fa-spin"></i>';
-        document.getElementById('finalTitle').innerText = "Verifying...";
-        document.getElementById('finalDesc').innerText = "Finalizing security check...";
-
+    async function verifyDevice(did, code, uid) {
         try {
-            const ref = database.ref(`users/${uid}/verification_codes/${code}`);
-            await ref.update({ used: true, used_at: firebase.database.ServerValue.TIMESTAMP });
+            await db.ref(`users/${uid}/verification_codes/${code}`).update({ used:true, used_at: firebase.database.ServerValue.TIMESTAMP });
+            
+            // Get Duration
+            const conf = (await db.ref(`users/${uid}/config`).once('value')).val();
+            let duration = (conf && conf.verification_minutes) ? conf.verification_minutes * 60000 : 86400000;
+            const expiry = Date.now() + duration;
 
-            let dur = 86400000;
-            const conf = (await database.ref(`users/${uid}/config`).once('value')).val();
-            if(conf && conf.verification_minutes) dur = conf.verification_minutes * 60000;
-            const expiry = Date.now() + dur;
+            await db.ref(`users/${uid}/devices/${did}`).set({ verification_time: Date.now(), expiry_time: expiry, last_code: code });
 
-            await database.ref(`users/${uid}/devices/${did}`).set({ verification_time:Date.now(), expiry_time:expiry, last_code:code });
-
-            localStorage.removeItem('secure_bridge_data'); // Cleanup
+            localStorage.removeItem('secure_bridge_data');
             localStorage.setItem('my_app_verification', JSON.stringify({ did, uid, expiry }));
-
+            
             showSuccess(expiry);
-
-        } catch(e) { showError("Failed", "Verification update failed."); }
+        } catch(e) { showError("Update Failed", "Could not verify device."); }
     }
 
     function showView(name) { Object.values(views).forEach(v => v.classList.remove('active')); views[name].classList.add('active'); }
-    
-    function showSuccess(expiry, isRevisit=false) {
+
+    function showSuccess(exp) {
         showView('final');
-        const icon = document.getElementById('finalIcon');
-        icon.className = "icon-wrapper status-success";
-        icon.innerHTML = '<i class="fas fa-check"></i>';
-        document.getElementById('finalTitle').innerText = "Access Granted";
-        document.getElementById('finalDesc').innerText = "Verification Complete.";
-        document.getElementById('timerArea').style.display = 'block';
-        
-        // Show OPEN APP Button
-        document.getElementById('finalBtn').style.display = 'block';
-        document.getElementById('retryBtn').style.display = 'none';
-        
         setInterval(() => {
-            const diff = expiry - Date.now();
-            if(diff<=0) return document.getElementById('timerDisplay').innerText = "00:00:00";
+            const diff = exp - Date.now();
+            if(diff<=0) return document.getElementById('timer').innerText = "00:00:00";
             const h = Math.floor(diff/3600000), m = Math.floor((diff%3600000)/60000), s = Math.floor((diff%60000)/1000);
-            document.getElementById('timerDisplay').innerText = `${h}:${m<10?'0'+m:m}:${s<10?'0'+s:s}`;
+            document.getElementById('timer').innerText = `${h}:${m<10?'0'+m:m}:${s<10?'0'+s:s}`;
         }, 1000);
     }
 
     function showError(t, m) {
-        showView('error');
-        document.getElementById('errTitle').innerText = t;
-        document.getElementById('errDesc').innerText = m;
+        showView('err');
+        document.getElementById('eTitle').innerText = t;
+        document.getElementById('eDesc').innerText = m;
     }
+
     window.onload = init;
 </script>
 </body>

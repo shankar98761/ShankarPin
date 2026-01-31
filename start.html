@@ -4,29 +4,63 @@
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
     <title>Secure Redirect</title>
+    <link href="https://fonts.googleapis.com/css2?family=Rajdhani:wght@500;700&display=swap" rel="stylesheet">
     <style>
-        body{background:#000;color:#fff;display:flex;align-items:center;justify-content:center;height:100vh;margin:0;font-family:sans-serif;}
-        .loader{border:3px solid #333;border-top:3px solid #00f3ff;border-radius:50%;width:40px;height:40px;animation:spin 0.8s linear infinite;}
-        @keyframes spin{0%{transform:rotate(0deg);}100%{transform:rotate(360deg);}}
+        body { background-color: #050505; color: white; height: 100vh; display: flex; flex-direction: column; justify-content: center; align-items: center; margin: 0; font-family: 'Rajdhani', sans-serif; overflow: hidden; }
+        .container { text-align: center; position: relative; z-index: 2; }
+        
+        /* Neon Loader */
+        .loader { width: 60px; height: 60px; border: 4px solid rgba(0, 243, 255, 0.1); border-top: 4px solid #00f3ff; border-radius: 50%; animation: spin 1s linear infinite; margin: 0 auto 20px; box-shadow: 0 0 20px rgba(0, 243, 255, 0.2); }
+        @keyframes spin { 0% { transform: rotate(0deg); } 100% { transform: rotate(360deg); } }
+        
+        h2 { font-size: 24px; margin: 0; text-transform: uppercase; letter-spacing: 2px; text-shadow: 0 0 10px rgba(255,255,255,0.3); }
+        p { color: #888; margin-top: 10px; font-size: 14px; }
+        
+        .timer-box { margin-top: 20px; background: rgba(255,255,255,0.05); padding: 10px 20px; border-radius: 20px; border: 1px solid rgba(255,255,255,0.1); display: inline-block; }
+        #timer { color: #00f3ff; font-weight: bold; font-size: 18px; }
+        
+        /* Background Effect */
+        .bg-glow { position: absolute; width: 100%; height: 100%; background: radial-gradient(circle at center, rgba(0, 243, 255, 0.05) 0%, transparent 70%); z-index: 1; pointer-events: none; }
     </style>
 </head>
 <body>
-    <div class="loader"></div>
+    <div class="bg-glow"></div>
+    <div class="container">
+        <div class="loader"></div>
+        <h2>Securing Session</h2>
+        <div class="timer-box">
+            Redirecting in <span id="timer">3</span>s ⌛
+        </div>
+        <p>Please wait...</p>
+    </div>
+
     <script>
         const p = new URLSearchParams(window.location.search);
         const token = p.get('token');
         const code = p.get('code');
         const uid = p.get('uid');
         const did = p.get('did');
-        const target = p.get('target'); 
+        const target = p.get('target');
 
         if(token && code && target) {
-            // Save to LocalStorage
+            // Save Token Securely
             localStorage.setItem('secure_bridge_data', JSON.stringify({ token, code, uid, did }));
-            // Redirect to Shortener
-            window.location.href = decodeURIComponent(target);
+            
+            // 3 Second Countdown Logic
+            let count = 3;
+            const timerElem = document.getElementById('timer');
+            
+            const interval = setInterval(() => {
+                count--;
+                timerElem.innerText = count;
+                if(count <= 0) {
+                    clearInterval(interval);
+                    window.location.href = decodeURIComponent(target);
+                }
+            }, 1000);
+            
         } else {
-            document.body.innerHTML = "<p style='color:red;text-align:center'>Link Error. Restart App.</p>";
+            document.body.innerHTML = "<h3 style='color:#ff4444;text-align:center'>Invalid Link Parameters<br><small>Please restart from App</small></h3>";
         }
     </script>
 </body>
